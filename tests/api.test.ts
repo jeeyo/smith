@@ -1,3 +1,9 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+const testRepoPath = path.join(os.tmpdir(), 'smith-test-repo');
+if (!fs.existsSync(testRepoPath)) fs.mkdirSync(testRepoPath, { recursive: true });
+fs.writeFileSync(path.join(testRepoPath, 'package.json'), JSON.stringify({ name: 'test-app', version: '1.0.0' }));
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app, server } from '../src/server/index.ts';
@@ -48,7 +54,7 @@ describe('Smith HTTP REST API Integration Tests', () => {
       .post('/api/v1/sessions')
       .send({
         name: 'API Test Session',
-        repoPath: process.cwd(),
+        repoPath: testRepoPath,
         macroGoal: 'Implement integration test suite for Smith ADE',
         agents: [
           { agentId: 'claude', model: 'claude-3-7-sonnet', mode: 'acp' },
@@ -70,7 +76,7 @@ describe('Smith HTTP REST API Integration Tests', () => {
       .post('/api/v1/sessions')
       .send({
         name: 'Empty Chat Session',
-        repoPath: process.cwd(),
+        repoPath: testRepoPath,
         agents: [
           { agentId: 'antigravity', model: 'gemini-2.5-pro', mode: 'acp' }
         ]
@@ -238,7 +244,7 @@ describe('Smith HTTP REST API Integration Tests', () => {
       .post('/api/v1/sessions')
       .send({
         name: 'Multi Worker Same Agent Session',
-        repoPath: process.cwd(),
+        repoPath: testRepoPath,
         agents: [
           { workerId: 'worker-1-claude', agentId: 'claude', model: 'claude-3-7-sonnet', mode: 'acp' },
           { workerId: 'worker-2-claude', agentId: 'claude', model: 'claude-3-5-haiku', mode: 'acp' },

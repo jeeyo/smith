@@ -2,12 +2,21 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { AgentAdapter, AdapterExecutionResult } from './types.ts';
 import { AgentHealthStatus, AgentId, TokenUsage } from '../../shared/types.ts';
+import { config } from '../config.ts';
 
 export class AntigravityAdapter implements AgentAdapter {
   readonly agentId: AgentId = 'antigravity';
   readonly name = 'Google Antigravity';
 
   getBinaryPath(): string {
+    if (config.agentBinaries?.antigravity) {
+      if (path.isAbsolute(config.agentBinaries.antigravity) && fs.existsSync(config.agentBinaries.antigravity)) {
+        return config.agentBinaries.antigravity;
+      }
+      if (!path.isAbsolute(config.agentBinaries.antigravity)) {
+        return config.agentBinaries.antigravity;
+      }
+    }
     const localAppData = process.env.LOCALAPPDATA || '';
     const agyPath = path.join(localAppData, 'Programs', 'antigravity', 'resources', 'bin', 'language_server.exe');
     if (fs.existsSync(agyPath)) return agyPath;

@@ -1,3 +1,5 @@
+import os from 'node:os';
+import path from 'node:path';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app, server } from '../src/server/index.ts';
@@ -13,7 +15,7 @@ describe('Goal Orchestrator & Single Chat Interface Tests', () => {
       .post('/api/v1/sessions')
       .send({
         name: 'Goal Orchestration Test Session',
-        repoPath: process.cwd(),
+        repoPath: path.join(os.tmpdir(), 'smith-test-repo'),
         macroGoal: 'Test Goal Orchestration',
         agents: [
           { agentId: 'claude', model: 'claude-3-7-sonnet', mode: 'acp' },

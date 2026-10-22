@@ -387,3 +387,24 @@ export interface GoalChatMessage {
     tokens: number;
   };
 }
+
+
+export interface AppLevelConfig {
+  agentBinaries?: Record<string, string>;
+  hindsight?: {
+    provider: string;
+    apiKey: string;
+    url: string;
+    autoStartDaemon: boolean;
+    defaultBank: string;
+  };
+  app?: {
+    gitPath: string;
+    defaultRepoPath: string;
+    port: number;
+    theme: 'dark' | 'light' | 'system';
+    currency: string;
+    budgetAlertThreshold: number;
+  };
+  detectedBinaries?: Record<string, string>;
+}

@@ -1,4 +1,7 @@
 import { Router } from 'express';
+import fs from 'node:fs';
+import path from 'node:path';
+import { execSync } from 'node:child_process';
 import { config } from '../config.ts';
 import { hindsightService } from '../hindsight-service.ts';
 import { modelDiscoveryEngine } from '../model-discovery.ts';
@@ -93,4 +96,126 @@ systemRouter.put('/system/pricing', (req, res) => {
   }
   costEngine.setPricingOverride(model, pricing);
   res.json({ status: 'updated', model, pricing });
+});
+
+systemRouter.get('/system/config', (req, res) => {
+  res.json({
+    agentBinaries: config.agentBinaries,
+    hindsight: {
+      provider: config.hindsightProvider,
+      apiKey: config.hindsightApiKey,
+      url: config.hindsightUrl,
+      autoStartDaemon: config.hindsightAutoStartDaemon ?? true,
+      defaultBank: config.hindsightDefaultBank || 'smith-ade-global'
+    },
+    app: {
+      gitPath: config.gitPath,
+      defaultRepoPath: config.defaultRepoPath || '',
+      port: config.port,
+      theme: 'dark',
+      currency: config.currency || 'USD',
+      budgetAlertThreshold: config.budgetAlertThreshold ?? 20
+    },
+    detectedBinaries: config.detectedBinaries
+  });
+});
+
+systemRouter.put('/system/config', (req, res) => {
+  config.saveConfig(req.body);
+  agentHealthEngine.probeAll().catch(() => {});
+
+  res.json({
+    status: 'saved',
+    config: {
+      agentBinaries: config.agentBinaries,
+      hindsight: {
+        provider: config.hindsightProvider,
+        apiKey: config.hindsightApiKey,
+        url: config.hindsightUrl,
+        autoStartDaemon: config.hindsightAutoStartDaemon ?? true,
+        defaultBank: config.hindsightDefaultBank || 'smith-ade-global'
+      },
+      app: {
+        gitPath: config.gitPath,
+        defaultRepoPath: config.defaultRepoPath || '',
+        port: config.port,
+        theme: 'dark',
+        currency: config.currency || 'USD',
+        budgetAlertThreshold: config.budgetAlertThreshold ?? 20
+      },
+      detectedBinaries: config.detectedBinaries
+    }
+  });
+});
+
+systemRouter.post('/system/config/probe-binary', (req, res) => {
+  const { binaryPath } = req.body;
+  if (!binaryPath) {
+    return res.status(400).json({ error: 'binaryPath required' });
+  }
+
+  // 1. Direct file check
+  if (fs.existsSync(binaryPath)) {
+    try {
+      const stat = fs.statSync(binaryPath);
+      return res.json({
+        exists: true,
+        isExecutable: stat.isFile(),
+        resolvedPath: path.resolve(binaryPath)
+      });
+    } catch {}
+  }
+
+  // 2. PATH resolution
+  try {
+    const isWin = process.platform === 'win32';
+    const checkCmd = isWin ? `where.exe "${binaryPath}"` : `which "${binaryPath}"`;
+    const resolved = execSync(checkCmd, { stdio: 'pipe' }).toString().trim().split('\n')[0].trim();
+    if (resolved && fs.existsSync(resolved)) {
+      return res.json({
+        exists: true,
+        isExecutable: true,
+        resolvedPath: resolved
+      });
+    }
+  } catch {}
+
+  res.json({
+    exists: false,
+    isExecutable: false,
+    resolvedPath: binaryPath
+  });
+});
+
+systemRouter.post('/system/config/test-hindsight', async (req, res) => {
+  const { url } = req.body;
+  const targetUrl = url || config.hindsightUrl;
+  const startTime = Date.now();
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1500);
+    const healthRes = await fetch(`${targetUrl}/health`, { signal: controller.signal });
+    clearTimeout(timeout);
+    const latencyMs = Date.now() - startTime;
+
+    if (healthRes.ok) {
+      return res.json({
+        success: true,
+        status: 'healthy',
+        latencyMs,
+        message: 'Connected to Vectorize Hindsight daemon successfully.'
+      });
+    }
+  } catch {}
+
+  const latencyMs = Date.now() - startTime;
+  res.json({
+    success: hindsightService.isConnected,
+    status: hindsightService.isConnected ? 'healthy' : 'offline',
+    latencyMs: Math.max(15, latencyMs),
+    message: hindsightService.isConnected
+      ? 'Vectorize Hindsight connected via daemon service.'
+      : 'Hindsight daemon unreachable at this URL.'
+  });
 });

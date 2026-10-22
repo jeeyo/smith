@@ -1,12 +1,10 @@
 import React from 'react';
-import { Terminal, RefreshCw, Sliders, Plus, GitBranch, AlertTriangle } from 'lucide-react';
+import { Terminal, RefreshCw, Sliders, Plus, GitBranch, Settings, PanelLeftOpen } from 'lucide-react';
 import { CostWidget } from './CostWidget.tsx';
 import { Session, SessionCostSummary, DiscoveredModel, AgentHealthStatus } from '../../shared/types.ts';
 
 interface TopBarProps {
   currentSession?: Session;
-  sessions?: Session[];
-  onSelectSession?: (session: Session) => void;
   costSummary?: SessionCostSummary;
   hindsightConnected: boolean;
   onOpenNewSession: () => void;
@@ -16,12 +14,13 @@ interface TopBarProps {
   availableModels?: DiscoveredModel[];
   agentHealth?: Record<string, AgentHealthStatus>;
   onOpenTerminal?: (cmd?: string) => void;
+  onToggleSidebar?: () => void;
+  isSidebarCollapsed?: boolean;
+  onOpenSettings?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
   currentSession,
-  sessions = [],
-  onSelectSession,
   costSummary,
   hindsightConnected,
   onOpenNewSession,
@@ -30,16 +29,29 @@ export const TopBar: React.FC<TopBarProps> = ({
   isRefreshingModels,
   availableModels = [],
   agentHealth = {},
-  onOpenTerminal
+  onOpenTerminal,
+  onToggleSidebar,
+  isSidebarCollapsed,
+  onOpenSettings
 }) => {
   const codexHealth = agentHealth['codex'];
   const claudeHealth = agentHealth['claude'];
   const antigravityHealth = agentHealth['antigravity'];
 
   return (
-    <header className="h-13 border-b border-zinc-800 bg-zinc-950 px-2.5 sm:px-4 py-2 flex items-center justify-between select-none">
+    <header className="h-13 border-b border-zinc-800 bg-zinc-950 px-2.5 sm:px-4 py-2 flex items-center justify-between select-none flex-shrink-0">
       {/* Brand & Active Session Info */}
       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+        {isSidebarCollapsed && onToggleSidebar && (
+          <button
+            onClick={onToggleSidebar}
+            title="Expand Sidebar"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900 border border-zinc-800 transition-colors flex-shrink-0"
+          >
+            <PanelLeftOpen className="w-4 h-4" />
+          </button>
+        )}
+
         <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-100 flex-shrink-0">
             <Terminal className="w-3.5 h-3.5" />
@@ -50,28 +62,19 @@ export const TopBar: React.FC<TopBarProps> = ({
           </div>
         </div>
 
-        {currentSession && (
-          <div className="hidden sm:flex items-center gap-2 pl-3 border-l border-zinc-800 text-xs min-w-0">
-            {sessions.length > 1 && onSelectSession ? (
-              <select
-                value={currentSession.id}
-                onChange={e => {
-                  const s = sessions.find(sess => sess.id === e.target.value);
-                  if (s) onSelectSession(s);
-                }}
-                className="bg-zinc-900 border border-zinc-800 text-zinc-200 font-medium rounded px-2 py-1 text-xs focus:outline-none max-w-[140px] truncate"
-              >
-                {sessions.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            ) : (
-              <span className="font-medium text-zinc-300 truncate max-w-[140px]">{currentSession.name}</span>
-            )}
+        {currentSession ? (
+          <div className="flex items-center gap-2 pl-3 border-l border-zinc-800 text-xs min-w-0">
+            <span className="font-medium text-zinc-200 truncate max-w-[180px] sm:max-w-[260px]" title={currentSession.name}>
+              {currentSession.name}
+            </span>
             <div className="hidden md:flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800 text-[11px] font-mono">
               <GitBranch className="w-3 h-3 text-zinc-400 flex-shrink-0" />
               <span className="truncate max-w-[120px]">{currentSession.worktree?.branch || 'main'}</span>
             </div>
+          </div>
+        ) : (
+          <div className="hidden sm:flex items-center pl-3 border-l border-zinc-800 text-xs text-zinc-500 font-mono">
+            No active session
           </div>
         )}
       </div>
@@ -157,6 +160,26 @@ export const TopBar: React.FC<TopBarProps> = ({
           </button>
         )}
 
+        {/* App Settings Configuration */}
+        {onOpenSettings && (
+          <button
+            onClick={onOpenSettings}
+            title="App-Level Configuration & Settings"
+            className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
+          >
+            <Settings className="w-3.5 h-3.5" />
+          </button>
+        )}
+
+        {/* Customizations / Session Skills & MCP Servers */}
+        <button
+          onClick={onOpenCustomizations}
+          title="Session Skills & MCP Servers"
+          className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
+        >
+          <Sliders className="w-3.5 h-3.5" />
+        </button>
+
         {/* New Session Button */}
         <button
           onClick={onOpenNewSession}
@@ -165,15 +188,6 @@ export const TopBar: React.FC<TopBarProps> = ({
         >
           <Plus className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">New Session</span>
-        </button>
-
-        {/* Customizations / Settings */}
-        <button
-          onClick={onOpenCustomizations}
-          title="Session Skills & MCP Servers"
-          className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
-        >
-          <Sliders className="w-3.5 h-3.5" />
         </button>
       </div>
     </header>

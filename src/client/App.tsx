@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TopBar } from './components/TopBar.tsx';
+import { Sidebar } from './components/Sidebar.tsx';
+import { SettingsView } from './components/SettingsView.tsx';
 import { GoalChat } from './components/GoalChat.tsx';
 import { CustomizationsDrawer } from './components/CustomizationsDrawer.tsx';
 import { NewSessionModal } from './components/NewSessionModal.tsx';
@@ -25,6 +27,10 @@ export const App: React.FC = () => {
   const [agentHealth, setAgentHealth] = useState<Record<string, AgentHealthStatus>>({});
   const [chatMessages, setChatMessages] = useState<GoalChatMessage[]>([]);
   const [isOrchestrating, setIsOrchestrating] = useState<boolean>(false);
+
+  // Layout & Navigation State
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
 
   // Modals & Drawers
   const [allSkills, setAllSkills] = useState<Skill[]>([]);
@@ -157,6 +163,29 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleDeleteSession = async (sessionId: string) => {
+    try {
+      const res = await fetch(`/api/v1/sessions/${sessionId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setSessions(prev => {
+          const updated = prev.filter(s => s.id !== sessionId);
+          if (currentSession?.id === sessionId) {
+            if (updated.length > 0) {
+              selectSession(updated[0]);
+            } else {
+              setCurrentSession(null);
+              setChatMessages([]);
+              setCostSummary(undefined);
+            }
+          }
+          return updated;
+        });
+      }
+    } catch (err) {
+      console.error('Failed to delete session', err);
+    }
+  };
+
   const handleSendGoal = async (goal: string) => {
     if (!currentSession) {
       // Auto-create a session if none exists
@@ -176,6 +205,7 @@ export const App: React.FC = () => {
           })
         });
         const newSession = await createRes.json();
+        setSessions(prev => [newSession, ...prev]);
         setCurrentSession(newSession);
         dispatchGoal(newSession.id, goal);
       } catch (err) {
@@ -225,6 +255,7 @@ export const App: React.FC = () => {
       });
       const newSession = await res.json();
       setSessions(prev => [newSession, ...prev]);
+      setIsSettingsOpen(false);
       selectSession(newSession);
     } catch (err) {
       console.error(err);
@@ -298,38 +329,76 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-zinc-950 text-zinc-100 overflow-hidden font-sans">
-      {/* Plain, Clean Top Header */}
-      <TopBar
-        currentSession={currentSession || undefined}
+    <div className="flex h-screen w-screen bg-zinc-950 text-zinc-100 overflow-hidden font-sans">
+      {/* Left Sidebar: Collapsible Chat List & App Settings Trigger */}
+      <Sidebar
         sessions={sessions}
-        onSelectSession={selectSession}
-        costSummary={costSummary}
-        hindsightConnected={hindsightConnected}
-        onOpenNewSession={() => setIsNewSessionOpen(true)}
-        onOpenCustomizations={() => setIsCustomizationsOpen(true)}
-        onRefreshModels={handleRefreshModels}
-        isRefreshingModels={isRefreshingModels}
-        availableModels={availableModels}
+        currentSession={currentSession}
+        onSelectSession={(session) => {
+          setIsSettingsOpen(false);
+          selectSession(session);
+        }}
+        onOpenNewSession={() => {
+          setIsSettingsOpen(false);
+          setIsNewSessionOpen(true);
+        }}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        isSettingsOpen={isSettingsOpen}
+        onDeleteSession={handleDeleteSession}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
         agentHealth={agentHealth}
-        onOpenTerminal={handleOpenTerminal}
+        hindsightConnected={hindsightConnected}
       />
 
-      {/* Main Single Chat Interface */}
-      <main className="flex-1 overflow-hidden flex flex-col">
-        <GoalChat
-          currentSession={currentSession}
-          messages={chatMessages}
-          isOrchestrating={isOrchestrating}
-          onSendGoal={handleSendGoal}
-          availableModels={availableModels}
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        {/* Top Header */}
+        <TopBar
+          currentSession={currentSession || undefined}
           costSummary={costSummary}
+          hindsightConnected={hindsightConnected}
+          onOpenNewSession={() => {
+            setIsSettingsOpen(false);
+            setIsNewSessionOpen(true);
+          }}
+          onOpenCustomizations={() => setIsCustomizationsOpen(true)}
+          onRefreshModels={handleRefreshModels}
+          isRefreshingModels={isRefreshingModels}
+          availableModels={availableModels}
+          agentHealth={agentHealth}
           onOpenTerminal={handleOpenTerminal}
-          onMergeWorktree={handleMergeWorktree}
-          onDiscardWorktree={handleDiscardWorktree}
-          onAnswerQuestion={handleAnswerQuestion}
+          onToggleSidebar={() => setIsSidebarCollapsed(prev => !prev)}
+          isSidebarCollapsed={isSidebarCollapsed}
+          onOpenSettings={() => setIsSettingsOpen(prev => !prev)}
         />
-      </main>
+
+        {/* View Switcher: App Settings or Single Goal Chat Interface */}
+        {isSettingsOpen ? (
+          <SettingsView
+            onClose={() => setIsSettingsOpen(false)}
+            onSaved={() => {
+              fetchHealth();
+              fetchModels();
+            }}
+          />
+        ) : (
+          <main className="flex-1 overflow-hidden flex flex-col">
+            <GoalChat
+              currentSession={currentSession}
+              messages={chatMessages}
+              isOrchestrating={isOrchestrating}
+              onSendGoal={handleSendGoal}
+              availableModels={availableModels}
+              costSummary={costSummary}
+              onOpenTerminal={handleOpenTerminal}
+              onMergeWorktree={handleMergeWorktree}
+              onDiscardWorktree={handleDiscardWorktree}
+              onAnswerQuestion={handleAnswerQuestion}
+            />
+          </main>
+        )}
+      </div>
 
       {/* Overlay Modals & Drawers */}
       <NewSessionModal

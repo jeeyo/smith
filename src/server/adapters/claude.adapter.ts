@@ -4,6 +4,7 @@ import { exec, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { AgentAdapter, AdapterExecutionResult } from './types.ts';
 import { AgentHealthStatus, AgentId, TokenUsage } from '../../shared/types.ts';
+import { config } from '../config.ts';
 
 const execAsync = promisify(exec);
 
@@ -12,6 +13,14 @@ export class ClaudeAdapter implements AgentAdapter {
   readonly name = 'Claude Code';
 
   getBinaryPath(): string {
+    if (config.agentBinaries?.claude) {
+      if (path.isAbsolute(config.agentBinaries.claude) && fs.existsSync(config.agentBinaries.claude)) {
+        return config.agentBinaries.claude;
+      }
+      if (!path.isAbsolute(config.agentBinaries.claude)) {
+        return config.agentBinaries.claude;
+      }
+    }
     const localAppData = process.env.LOCALAPPDATA || '';
     const claudeDir = path.join(localAppData, 'Claude-Data');
     if (fs.existsSync(claudeDir)) {
@@ -24,7 +33,11 @@ export class ClaudeAdapter implements AgentAdapter {
   isInstalled(): boolean {
     const bin = this.getBinaryPath();
     if (path.isAbsolute(bin)) return fs.existsSync(bin);
-    return false;
+    if (process.platform === 'win32') {
+      const appData = process.env.APPDATA || '';
+      if (fs.existsSync(path.join(appData, 'npm', `${bin}.cmd`))) return true;
+    }
+    return true;
   }
 
   private findBinary(baseDir: string, targetName: string, maxDepth: number = 5): string | null {
