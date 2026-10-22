@@ -295,7 +295,39 @@ Located in `src/server/config.ts` and `src/server/routes/system.router.ts`:
 
 ---
 
-## 13. Automated Test Suite
+## 13. Docker & Multi-Architecture Containerization Architecture
+
+Located in `Dockerfile` and `.github/workflows/release.yml`:
+
+Smith ADE is containerized as a production-grade multi-architecture container (`linux/amd64` and `linux/arm64`) for server and headless deployments:
+
+```
+Docker Container Pipeline
+      │
+      ├── Base Image ───────────────> node:22-bookworm-slim (amd64 / arm64)
+      ├── Toolchain Extraction ─────> Astral uv & uvx (/usr/local/bin) from ghcr.io/astral-sh/uv
+      ├── Python Runtime ───────────> Python 3.12 managed via uv (UV_PYTHON=3.12)
+      ├── Memory Daemon Cache ──────> uv tool install hindsight-embed && uvx hindsight-embed
+      ├── Multi-Stage Bundling ─────> Stage 1: Vite client (dist/) + esbuild server (dist-server/)
+      │                              Stage 2: Production runtime with --omit=dev dependencies
+      └── Multi-Platform Publish ───> GitHub Container Registry (ghcr.io/jeeyo/smith:latest, :vX.X.X)
+```
+
+### Key Container Specifications:
+1. **Pre-Warmed Vectorize Hindsight Tool Cache**:
+   - Running `uv tool install hindsight-embed` and `uvx hindsight-embed --help` during image build compiles Python wheels and primes the tool cache inside `/root/.local/` and the uv cache.
+   - At runtime, `@vectorize-io/hindsight-all` executes `uvx hindsight-embed` with **zero network latency** and complete offline capability.
+2. **Multi-Architecture Matrix (`linux/amd64` & `linux/arm64`)**:
+   - Cross-compiled via GitHub Actions using `docker/setup-qemu-action` and `docker/setup-buildx-action`.
+   - Native execution on Intel/AMD servers and ARM64 cloud instances (AWS Graviton, Apple Silicon servers).
+3. **Container Healthcheck**:
+   - Automated `HEALTHCHECK` periodically pings `http://localhost:4100/api/v1/health` with a 20-second interval and 10-second start grace period.
+4. **Volumes & Data Persistence**:
+   - Persists session memory, Git worktrees, and application settings by mounting a host volume to `/root/.smith`.
+
+---
+
+## 14. Automated Test Suite
 
 Run all automated unit, integration, and configuration tests with vitest:
 ```bash
