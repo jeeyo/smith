@@ -6,17 +6,21 @@
 
 Smith ADE is a high-performance, API-first **Cooperative Agentic Development Environment** packaged as a cross-platform desktop application using **Electron**. It provides dual-layer persistent memory powered by the official **Vectorize Hindsight** daemon, real-time multi-agent orchestration, interactive human-in-the-loop clarifications, dynamic model discovery, and cost telemetry.
 
+![Smith ADE Desktop Interface](docs/images/screenshot_left_sidebar_chat_list.png)
+
 ---
 
 ## 🌟 Key Features
 
 - 🖥️ **Cross-Platform Electron Desktop App**: Single-window desktop experience with native lifecycle management, hardware acceleration, and integrated background server supervision.
+- 🗂️ **Collapsible Left Sidebar**: Clean, dedicated chat session management with real-time search, Git worktree branch badges, active session indicators, one-click deletion, and collapsible icon view.
+- ⚙️ **Application-Level Configuration Hub**: In-app configuration dashboard (`SettingsView`) to customize executable paths for **Claude Code**, **Google Antigravity**, **OpenCode**, **Codex**, and **Astral `uv`/`uvx`**, alongside **Vectorize Hindsight** provider selection (`openai`, `anthropic`, `gemini`, `ollama`), masked API keys, and workspace defaults with live on-disk path verification.
 - 🧠 **Embedded Vectorize Hindsight Daemon**: Zero-friction embedded memory engine using `@vectorize-io/hindsight-all` and `uvx hindsight-embed`, providing persistent bank storage, cross-session episodic memory, facts, and anti-patterns.
-- 🤖 **Goal Orchestrator & Multi-Agent Swarms**: Autonomous orchestrator backed by real agent harnesses (Claude Code, Antigravity, OpenCode, Aider) with support for parallel multi-worker execution.
+- 🤖 **Goal Orchestrator & Multi-Agent Swarms**: Autonomous orchestrator backed by real agent harnesses (Claude Code, Antigravity, OpenCode, Codex) with support for parallel multi-worker execution.
 - 💬 **Interactive Human-In-The-Loop**: Native support for agent questionnaires (`ask_question`), interactive decision prompts, and unified chat streaming.
 - ⚡ **Dual-Layer Memory**: High-speed in-memory short-term cache combined with long-term semantic knowledge banks.
 - 📊 **Real-Time Telemetry & Costs**: Live token usage, financial expenditure breakdown, and active agent execution tracing.
-- 📖 **Interactive OpenAPI Documentation**: Embedded Swagger UI available at `/docs` with live REST endpoints.
+- 📖 **Interactive OpenAPI Documentation**: Embedded Swagger UI available at `/api/docs` with live REST endpoints.
 
 ---
 
@@ -51,6 +55,7 @@ npm run electron:dev
 ### Running Test Suite
 
 ```bash
+# Run all unit, integration, and configuration tests
 npm test
 ```
 
@@ -76,13 +81,17 @@ flowchart TD
         Main["Main Process (main.ts)"]
         Preload["Preload Bridge (preload.ts)"]
         Renderer["React 19 + Tailwind UI"]
+        Sidebar["Collapsible Left Sidebar (Sidebar.tsx)"]
+        SettingsView["Application Configuration (SettingsView.tsx)"]
+        GoalChat["Single Goal Chat (GoalChat.tsx)"]
     end
 
-    subgraph Backend ["Embedded Express & WebSocket Server (Port 3001)"]
+    subgraph Backend ["Embedded Express & WebSocket Server (Port 4100)"]
         API["REST API & WebSocket Broadcast"]
         Orchestrator["Goal Orchestrator"]
         Discovery["Model & Agent Discovery"]
         CostEngine["Cost & Token Engine"]
+        ConfigEngine["Config Engine (~/.smith/config.json)"]
     end
 
     subgraph Hindsight ["Vectorize Hindsight Engine (Port 8888)"]
@@ -95,6 +104,10 @@ flowchart TD
     Main --> HSDaemon
     Renderer --> Preload
     Preload --> API
+    Renderer --> Sidebar
+    Renderer --> SettingsView
+    Renderer --> GoalChat
+    API --> ConfigEngine
     Backend --> HSClient
     HSClient --> HSDaemon
     HSDaemon --> MemoryBank

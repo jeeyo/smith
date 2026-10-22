@@ -5,10 +5,12 @@ This document details the internal architecture, protocol specifications, data f
 ```mermaid
 flowchart TB
     subgraph UI ["Client Layer (React 19 + Vite + Tailwind)"]
+        Sidebar["Collapsible Sidebar (Sidebar.tsx: Chat List, Search, Branch Badges, Delete)"]
+        TopBar["TopBar (Breadcrumbs, Health Badges, Cost, Settings Trigger)"]
         GoalChat["Single Unified Goal Chat (Conversational Stream)"]
-        TopBar["TopBar (Agent Health, Models, Real-Time USD Cost)"]
         PlanCard["Inline Cooperative Task DAG Card"]
         DiffCard["Worktree Diff Preview & One-Click Merge Card"]
+        SettingsView["Application Configuration View (SettingsView.tsx)"]
         BehindScenes["Collapsible Behind-the-Scenes Drawer"]
         TerminalModal["In-App Terminal Modal (ConPTY /ws/pty/*)"]
         CustomizationsDrawer["Customizations & MCP Settings Drawer"]
@@ -18,7 +20,7 @@ flowchart TB
         APIRouter["API Router (/api/v1/*)"]
         GoalRouter["Goal & Chat Router (/sessions/:id/goal, /chat)"]
         WorktreeRouter["Worktree Router (/sessions/:id/worktree/*)"]
-        SystemRouter["System & PTY Router (/system/pty/*, /system/agents/*)"]
+        SystemRouter["System, PTY & Config Router (/system/config, /system/pty/*, /system/agents/*)"]
         WSHub["WebSocket Hub (/ws/events, /ws/pty/*)"]
         SwaggerDocs["OpenAPI 3.0 Documentation (/api/docs)"]
     end
@@ -31,6 +33,7 @@ flowchart TB
         CostEngine["USD Cost & Token Accounting Engine"]
         WorktreeMgr["Git Worktree Isolation & Diff Engine"]
         PTYMgr["Interactive PTY Process Manager"]
+        ConfigMgr["Configuration Manager (config.ts: ~/.smith/config.json)"]
         HindsightService["Hindsight Semantic Vector Memory Service"]
     end
 
@@ -38,6 +41,7 @@ flowchart TB
         ClaudeAdapter["ClaudeAdapter (claude -p non-interactive)"]
         CodexAdapter["CodexAdapter (powershell null pipe stdin)"]
         AntigravityAdapter["AntigravityAdapter (daemon & ACP host)"]
+        OpencodeAdapter["OpencodeAdapter (OpenCode CLI harness)"]
     end
 
     subgraph LocalMemory ["Embedded Native Vector Memory & Vectorize Hindsight"]
@@ -48,16 +52,21 @@ flowchart TB
 
     UI <-->|HTTP REST & WebSocket| API
     API <--> CoreEngine
+    Sidebar --> GoalChat
+    TopBar --> SettingsView
     GoalRouter --> GoalOrchestrator
     WorktreeRouter --> WorktreeMgr
     SystemRouter --> PTYMgr
     SystemRouter --> AgentHealthEngine
+    SystemRouter --> ConfigMgr
     GoalOrchestrator --> AgentHealthEngine
     GoalOrchestrator --> TaskLeaseMgr
     GoalOrchestrator --> TeamBus
     GoalOrchestrator --> CostEngine
     GoalOrchestrator --> WorktreeMgr
     GoalOrchestrator --> HindsightService
+    ConfigMgr --> ProcessAdapters
+    ConfigMgr --> HindsightService
     AgentHealthEngine --> ProcessAdapters
     CoreEngine <--> ProcessAdapters
     HindsightService --> VectorEngine
@@ -108,16 +117,23 @@ src/server/adapters/
 ├── claude.adapter.ts       # Non-interactive -p execution & /login detection
 ├── codex.adapter.ts        # PowerShell null-pipe ($null |) stdin EOF handling
 ├── antigravity.adapter.ts  # Daemon language_server / agy socket harness
+├── opencode.adapter.ts     # OpenCode CLI harness & dynamic binary resolution
 └── index.ts                # getAgentAdapter(agentId) registry
 ```
 
-### Stdio Handling Specifications:
+### Stdio Handling & Binary Override Specifications:
 * **Claude (`claude.adapter.ts`)**:
   - Claude CLI blocks if standard input is attached but idle. The adapter executes via `-p "<prompt>"` with `stdio: ['ignore', 'pipe', 'pipe']` and parses stdout/stderr for `Not logged in` and `/login` prompts.
+  - Dynamically reads `config.agentBinaries.claude` with fallback to `Claude-Data` or global npm path.
 * **Codex (`codex.adapter.ts`)**:
   - Codex CLI blocks waiting for stdin EOF on Windows. The adapter runs `$null | & "${bin}" exec "${prompt}" --skip-git-repo-check` and detects rate-limiting signatures (`usage limit reached. Resets at [time]`).
+  - Reads `config.agentBinaries.codex`.
 * **Antigravity (`antigravity.adapter.ts`)**:
-  - Connects to the local Google Antigravity language_server daemon or simulated ACP session with guaranteed zero-conflict task leases.
+  - Connects to the local Google Antigravity `language_server.exe` daemon or simulated ACP session with guaranteed zero-conflict task leases.
+  - Reads `config.agentBinaries.antigravity`.
+* **OpenCode (`opencode.adapter.ts`)**:
+  - Executes local models and OpenCode command line tasks.
+  - Reads `config.agentBinaries.opencode`.
 
 ---
 
@@ -147,7 +163,6 @@ When an agent is rate-limited or unauthenticated:
 ## 4. Conversational Delta-Planning
 
 Follow-up user prompts must not re-trigger cumbersome 3-phase macro decompositions:
-
 1. `GoalOrchestrator.executeGoal` checks if prior completed orchestrator messages with an existing plan exist.
 2. If `isConversationalDelta === true`:
    - Extracts focused intent from user prompt (e.g. test refinement, schema update).
@@ -168,6 +183,8 @@ Located in `src/server/worktree-manager.ts` and `src/server/routes/worktree.rout
   - `GET /api/v1/sessions/:id/worktree/summary`
   - `POST /api/v1/sessions/:id/worktree/merge` -> Executes non-fast-forward merge into `main` and returns commit SHA.
   - `POST /api/v1/sessions/:id/worktree/discard` -> Resets worktree state.
+- **Root Workspace Safety Isolation**:
+  - `WorktreeManager` includes explicit safety guards preventing `mergeWorktree` or `discardWorktree` from running destructive `git checkout` or `git reset --hard` on `process.cwd()` or during test runs.
 
 ---
 
@@ -184,6 +201,7 @@ Agent Execution / Deliverables
       ├── .html / ```html   ────> Sandboxed <iframe> (allow-scripts allow-forms allow-same-origin allow-modals)
       │                           └─ Viewport toggles: Desktop (100%), Tablet (768px), Mobile (375px)
       ├── Images (.svg/.png) ───> Responsive Checkerboard Canvas + Zoom/Fit Controls
+      ├── Interactive Questions ─> Multi-Choice Options Modal (ask_question)
       └── Other (.json/.pdf) ───> Direct File Card with One-Click Attachment Download
 ```
 
@@ -258,14 +276,34 @@ Located in `src/server/observer-agent.ts`:
 
 ---
 
-## 12. Automated Test Suite
+## 12. Application Configuration & Binary Probing Architecture
 
-Run all automated unit and integration tests with vitest:
+Located in `src/server/config.ts` and `src/server/routes/system.router.ts`:
+
+```
+~/.smith/config.json
+├── agentBinaries: { claude, antigravity, opencode, codex, uv }
+├── hindsight: { provider, apiKey, url, autoStartDaemon, defaultBank }
+└── app: { gitPath, defaultRepoPath, port, currency, budgetAlertThreshold }
+```
+
+- **Persistence Layer**: Reads and saves global configuration in `~/.smith/config.json`.
+- **System Binary Scanner (`detectDefaultBinaries`)**: Probes default Windows and Unix installation paths for `git.exe`, Claude Code (`Claude-Data`, npm global), Google Antigravity (`language_server.exe`, `agy-node.cmd`), OpenCode, and Astral `uv`.
+- **Live On-Disk Verification (`POST /api/v1/system/config/probe-binary`)**: Checks direct file path existence or resolves through system `PATH` using `where.exe`/`which`, returning `{ exists, isExecutable, resolvedPath }`.
+- **Live Hindsight Latency Probe (`POST /api/v1/system/config/test-hindsight`)**: Queries the target Hindsight URL with timeout abort controllers and returns round-trip ping latency in milliseconds.
+- **Dynamic Adapter Hot-Apply**: Updating settings hot-applies changes immediately to running adapters without dropping active sessions.
+
+---
+
+## 13. Automated Test Suite
+
+Run all automated unit, integration, and configuration tests with vitest:
 ```bash
 npm test
 ```
 
-Test coverage includes:
+Test coverage includes 10 test suites and **54 passing tests**:
+- `tests/system-config.test.ts`: App-level configuration CRUD, JSON persistence, binary verification, and Hindsight connectivity probes.
 - `tests/api.test.ts`: REST endpoints, session CRUD, and health probes.
 - `tests/cost-engine.test.ts`: Real-time USD pricing and token accounting.
 - `tests/goal-orchestrator.test.ts`: Zero-racing task decomposition, health-aware task rerouting, conversational delta-planning, worktree merge endpoints, artifact generation, and observer signoff.

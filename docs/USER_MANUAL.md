@@ -4,7 +4,7 @@ Welcome to **Smith**—an API-first, cooperative **Agentic Development Environme
 
 From the user's perspective, **Smith is a single, clean chat interface**: you declare your macro-goal in plain English, and the non-racing multi-agent execution (arXiv:2610.22319) happens entirely behind the scenes in isolated Git worktrees.
 
-![Smith Goal Chat Interface](images/screenshot_goal_chat_executed.png)
+![Smith ADE Desktop Interface](images/screenshot_left_sidebar_chat_list.png)
 
 ---
 
@@ -12,21 +12,23 @@ From the user's perspective, **Smith is a single, clean chat interface**: you de
 1. [Core Capabilities & Value Proposition](#1-core-capabilities--value-proposition)
 2. [Zero API Key Architecture: Using Your Existing Subscriptions](#2-zero-api-key-architecture-using-your-existing-subscriptions)
 3. [Quick Start & Launch](#3-quick-start--launch)
-4. [The Single Goal Chat Interface](#4-the-single-goal-chat-interface)
-5. [Pre-Flight Health-Aware Task Routing](#5-pre-flight-health-aware-task-routing)
-6. [Worktree Git Diff Preview & One-Click Merge](#6-worktree-git-diff-preview--one-click-merge)
-7. [Conversational Delta-Planning](#7-conversational-delta-planning)
-8. [Embedded In-App Terminal & Quick Login](#8-embedded-in-app-terminal--quick-login)
-9. [Cooperative Multi-Agent Protocol Behind the Scenes (arXiv:2610.22319)](#9-cooperative-multi-agent-protocol-behind-the-scenes-arxiv261022319)
-10. [Inspecting Behind-the-Scenes Operations](#10-inspecting-behind-the-scenes-operations)
-11. [In-IDE Broadcast Chat Layer & Peer Negotiation](#11-in-ide-broadcast-chat-layer--peer-negotiation)
-12. [Per-Session Dual-Layer Persistent Memory & Compaction Survival](#12-per-session-dual-layer-persistent-memory--compaction-survival)
-13. [The Observer Agent: Independent Safety & Verification Harness](#13-the-observer-agent-independent-safety--verification-harness)
-14. [Vectorize Hindsight Global Memory Across Sessions](#14-vectorize-hindsight-global-memory-across-sessions)
-15. [Rich Artifact Previews & File Downloads (Images, Mermaid Diagrams, HTML Pages)](#15-rich-artifact-previews--file-downloads-images-mermaid-diagrams-html-pages)
-16. [Real-Time USD Cost & Token Tracking](#16-real-time-usd-cost--token-tracking)
-17. [Session Customizations (Plugins, Skills, Custom MCP)](#17-session-customizations-plugins-skills-custom-mcp)
-18. [REST & WebSocket API Guide](#18-rest--websocket-api-guide)
+4. [The Collapsible Left Sidebar & Session Management](#4-the-collapsible-left-sidebar--session-management)
+5. [The Single Goal Chat Interface](#5-the-single-goal-chat-interface)
+6. [Pre-Flight Health-Aware Task Routing](#6-pre-flight-health-aware-task-routing)
+7. [Worktree Git Diff Preview & One-Click Merge](#7-worktree-git-diff-preview--one-click-merge)
+8. [Conversational Delta-Planning](#8-conversational-delta-planning)
+9. [Embedded In-App Terminal & Quick Login](#9-embedded-in-app-terminal--quick-login)
+10. [Cooperative Multi-Agent Protocol Behind the Scenes (arXiv:2610.22319)](#10-cooperative-multi-agent-protocol-behind-the-scenes-arxiv261022319)
+11. [Inspecting Behind-the-Scenes Operations](#11-inspecting-behind-the-scenes-operations)
+12. [In-IDE Broadcast Chat Layer & Peer Negotiation](#12-in-ide-broadcast-chat-layer--peer-negotiation)
+13. [Per-Session Dual-Layer Persistent Memory & Compaction Survival](#13-per-session-dual-layer-persistent-memory--compaction-survival)
+14. [The Observer Agent: Independent Safety & Verification Harness](#14-the-observer-agent-independent-safety--verification-harness)
+15. [Vectorize Hindsight Global Memory Across Sessions](#15-vectorize-hindsight-global-memory-across-sessions)
+16. [Rich Artifact Previews & File Downloads (Images, Mermaid Diagrams, HTML Pages)](#16-rich-artifact-previews--file-downloads-images-mermaid-diagrams-html-pages)
+17. [Real-Time USD Cost & Token Tracking](#17-real-time-usd-cost--token-tracking)
+18. [Global Application-Level Configuration (SettingsView)](#18-global-application-level-configuration-settingsview)
+19. [Session Customizations (Plugins, Skills, Custom MCP)](#19-session-customizations-plugins-skills-custom-mcp)
+20. [REST & WebSocket API Guide](#20-rest--websocket-api-guide)
 
 ---
 
@@ -38,6 +40,8 @@ Traditional multi-agent setups suffer from major roadblocks:
 - **Fragile CLI Execution**: Real agent CLIs (`claude`, `codex`) hang when prompted non-interactively or throw usage limits without proactive failovers.
 
 **Smith solves this with:**
+- **Collapsible Left Sidebar**: Clean, quick navigation across all your concurrent chats and sessions with real-time filtering, branch badges, and one-click deletion.
+- **Global App Configuration**: In-app dashboard to set custom agent binaries, Vectorize Hindsight providers + API keys, and workspace defaults without editing JSON files.
 - **Single Goal Interface**: You declare your goal; Smith decomposes, coordinates, and executes it end-to-end.
 - **Pre-Flight Health-Aware Routing**: Real-time probes detect rate limits (`codex`) or missing auth (`claude`) before DAG creation, auto-routing tasks to ready agents (`@antigravity`) with explicit UI indicator pills.
 - **Worktree Diff Preview & One-Click Merge**: Completed goals display inline diff cards (`+lines / -lines`, per-file diff accordion, clean merge verification) with `[Merge to main]` and `[Discard]` actions.
@@ -58,15 +62,16 @@ Smith operates directly on your installed command-line agent tools:
 * **OpenCode (`opencode`)**: Supports local models (e.g. Ollama, Qwen, DeepSeek) with 100% free offline execution.
 
 > [!NOTE]
-> No API keys are required to execute agents. All coding agents execute via native local subscription credentials.
+> No pay-per-token API keys are required to execute agents. All coding agents execute via native local subscription credentials.
 
 ---
 
 ## 3. Quick Start & Launch
 
 ### Prerequisites
-1. **Node.js**: v18+ installed.
-2. **Git**: Installed and available on system path.
+1. **Node.js**: v22+ installed.
+2. **Git**: Installed and available on system path (or configured via App Settings).
+3. **Astral `uv`**: Required for embedded Vectorize Hindsight daemon (`uvx hindsight-embed`).
 
 ### Starting the Server
 ```bash
@@ -80,29 +85,45 @@ npm install
 npm run server
 ```
 
-Open your browser to:
+Open your browser or Electron app to:
 * **Smith UI**: `http://localhost:4100`
 * **Interactive OpenAPI Swagger Docs**: `http://localhost:4100/api/docs`
 
 ### Creating a New Session
 
-Click the **`+ New Session`** button in the top navigation bar to open the **New Session** dialog:
+Click the **`+ New Session`** button in the top navigation bar or the **`+ New Chat`** button in the left sidebar to open the **New Session** dialog:
 
 ![Smith New Session Dialog](images/screenshot_new_session_dialog.png)
 
 This dialog enables you to configure the session environment without forcing an upfront goal declaration:
 1. **Name the Session**: Assign a descriptive identifier (e.g. *"Distributed Event Sourcing Architecture"*).
 2. **Configure Isolated Worktree**: Set the disk repository path and the base Git branch. Smith creates an isolated Git worktree so that agents never touch or corrupt your current working tree directly.
-3. **Allocate Worker Agent Models**: Selectively enable or disable worker agents (`@claude`, `@codex`, `@antigravity`, `@opencode`) and assign specific model versions to each agent.
-4. **Configure Observer Agent & Model**: Pick the 5th independent telemetry auditor agent and select its model from the discovered models list using the same dropdown format. The Observer evaluates telemetry, catches hallucinations, and certifies milestones autonomously using its native judgment and instincts.
-
-Once created, Smith takes you directly into the new chat session where you discuss, refine, and declare your engineering goals:
-
-![Smith Session Chat Ready](images/screenshot_session_chat_ready.png)
+3. **Allocate Worker Agent Models**: Selectively enable or disable worker agents (`@claude`, `@codex`, `@antigravity`, `@opencode`) and assign specific model versions to each agent. Supports assigning the same agent to multiple workers.
+4. **Configure Observer Agent & Model**: Pick the 5th independent telemetry auditor agent and select its model from the discovered models list. The Observer evaluates telemetry, catches hallucinations, and certifies milestones autonomously.
 
 ---
 
-## 4. The Single Goal Chat Interface
+## 4. The Collapsible Left Sidebar & Session Management
+
+![Collapsible Left Sidebar](images/screenshot_left_sidebar_chat_list.png)
+
+The left sidebar provides full-featured session lifecycle and chat organization:
+- **Collapsible Toggle**: Click the collapse button (`PanelLeftClose`) in the header to shrink the sidebar into a slim icon rail, leaving maximum horizontal space for the chat and code diffs. Click `PanelLeftOpen` to expand it.
+- **+ New Chat**: Prominently positioned primary button to spin up a new session instantly.
+- **Real-Time Chat Search**: Filter across hundreds of sessions by chat title or goal keyword in real-time.
+- **Session Item Details**:
+  - **Active Indicator**: Green chat icon and highlighted border for the current session.
+  - **Branch Badge**: Displays the isolated worktree Git branch (e.g., `smith/auth-service`).
+  - **Macro-Goal Preview**: Truncated preview of the active goal.
+- **One-Click Session Deletion**: Hovering over any chat reveals a trash icon (`Trash2`). Clicking triggers an inline `[Delete | Cancel]` safety confirmation. Confirming terminates background agents, safely cleans up the isolated Git worktree, and deletes the session metadata.
+- **Footer Diagnostics**:
+  - Live Hindsight connection indicator (`Online` / `Offline`).
+  - Active ready agents counter.
+  - Quick trigger button for **App Configuration** (`SettingsView`).
+
+---
+
+## 5. The Single Goal Chat Interface
 
 ![Smith Goal Chat Interface](images/screenshot_goal_chat_executed.png)
 
@@ -118,7 +139,7 @@ The central experience is a unified, conversational goal stream:
 
 ---
 
-## 5. Pre-Flight Health-Aware Task Routing
+## 6. Pre-Flight Health-Aware Task Routing
 
 Smith probes live agent CLIs before generating tasks. If an agent is rate-limited (e.g. `codex` usage limit reached) or unauthenticated (e.g. `claude` requires login):
 1. **Warning Card**: The chat bubble displays an alert banner explaining the condition, reset time, and remediation.
@@ -127,7 +148,7 @@ Smith probes live agent CLIs before generating tasks. If an agent is rate-limite
 
 ---
 
-## 6. Worktree Git Diff Preview & One-Click Merge
+## 7. Worktree Git Diff Preview & One-Click Merge
 
 When a goal completes, Smith inspects the session worktree branch and renders an inline Git review card:
 
@@ -138,7 +159,7 @@ When a goal completes, Smith inspects the session worktree branch and renders an
 
 ---
 
-## 7. Conversational Delta-Planning
+## 8. Conversational Delta-Planning
 
 When you ask a follow-up question or request an edit (e.g. *"Add unit test verifying expired token rejection and clock skew"*):
 - Smith detects an existing completed plan in the conversation history.
@@ -149,7 +170,7 @@ When you ask a follow-up question or request an edit (e.g. *"Add unit test verif
 
 ---
 
-## 8. Embedded In-App Terminal & Quick Login
+## 9. Embedded In-App Terminal & Quick Login
 
 ![In-App Terminal](images/screenshot_in_app_terminal.png)
 
@@ -161,7 +182,7 @@ Need to authenticate Claude or Codex without opening external terminal windows?
 
 ---
 
-## 9. Cooperative Multi-Agent Protocol Behind the Scenes (arXiv:2610.22319)
+## 10. Cooperative Multi-Agent Protocol Behind the Scenes (arXiv:2610.22319)
 
 Smith's backend enforces the multi-agent coordination principles described in the cooperative planning literature (arXiv:2610.22319):
 1. **Automatic Decomposition**: The user's single goal is broken into sequential and parallel phases with explicit file scopes.
@@ -171,7 +192,7 @@ Smith's backend enforces the multi-agent coordination principles described in th
 
 ---
 
-## 10. Inspecting Behind-the-Scenes Operations
+## 11. Inspecting Behind-the-Scenes Operations
 
 ![Behind the Scenes Drawer](images/screenshot_goal_chat_behind_scenes.png)
 
@@ -183,7 +204,7 @@ Click **"Behind the scenes"** on any orchestrator message to toggle the unified 
 
 ---
 
-## 11. In-IDE Broadcast Chat Layer & Peer Negotiation
+## 12. In-IDE Broadcast Chat Layer & Peer Negotiation
 
 ![Peer Broadcast Chat Layer](images/screenshot_peer_broadcast_tab.png)
 
@@ -205,7 +226,7 @@ Smith implements a decentralized broadcast channel inspired by multi-agent coope
 
 ---
 
-## 12. Per-Session Dual-Layer Persistent Memory & Compaction Survival
+## 13. Per-Session Dual-Layer Persistent Memory & Compaction Survival
 
 ![Dual-Layer Persistent Memory](images/screenshot_dual_memory_tab.png)
 
@@ -237,7 +258,7 @@ Each session in Smith maintains an isolated dual-layer memory directory under `.
 
 ---
 
-## 13. The Observer Agent: Independent Safety & Verification Harness
+## 14. The Observer Agent: Independent Safety & Verification Harness
 
 ![The Observer Verification Harness](images/screenshot_observer_harness.png)
 
@@ -252,7 +273,7 @@ The Observer passively audits execution traces, git worktrees, and program outpu
 
 ---
 
-## 14. Vectorize Hindsight Global Memory Across Sessions
+## 15. Vectorize Hindsight Global Memory Across Sessions
 
 While dual-layer memory provides isolated per-session workspaces, **Vectorize Hindsight** powers global memory across all sessions and projects:
 - **`@vectorize-io/hindsight-all` Daemon Supervisor**: Spawns and supervises the local Hindsight server on port 8888.
@@ -263,7 +284,7 @@ While dual-layer memory provides isolated per-session workspaces, **Vectorize Hi
 
 ---
 
-## 15. Rich Artifact Previews & File Downloads (Images, Mermaid Diagrams, HTML Pages)
+## 16. Rich Artifact Previews & File Downloads (Images, Mermaid Diagrams, HTML Pages)
 
 Agents collaborating on complex engineering goals frequently produce rich deliverables: architecture diagrams, frontend UI mockups, interactive HTML prototypes, and audit reports.
 
@@ -277,10 +298,11 @@ Smith automatically parses and renders these artifacts with dedicated interactiv
 │ • HTML Pages (.html / ```html)          -> Sandboxed interactive iframe│
 │ • Images (.png, .jpg, .svg)            -> Responsive zoom/fit lightbox │
 │ • Other Files (.json, .pdf, .zip, etc.)-> Clean card + Download button │
+│ • Interactive Questions (ask_question) -> Multi-choice modal cards    │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 15.1. Mermaid Diagrams (Live Interactive SVG)
+### 16.1. Mermaid Diagrams (Live Interactive SVG)
 
 ![Mermaid Diagram Preview](images/screenshot_goal_chat_executed.png)
 
@@ -292,7 +314,7 @@ When an agent generates a `.mmd` file or outputs a ````mermaid ... ```` markdown
 
 ---
 
-### 15.2. Interactive HTML Web Prototypes (Sandboxed Preview)
+### 16.2. Interactive HTML Web Prototypes (Sandboxed Preview)
 
 ![HTML Prototype Preview](images/screenshot_artifact_html.png)
 
@@ -307,7 +329,7 @@ When an agent creates an HTML prototype (e.g. `auth_prototype.html` or inline ``
 
 ---
 
-### 15.3. Inline Image Previews
+### 16.3. Inline Image Previews
 
 ![SVG Image Preview](images/screenshot_artifact_image.png)
 
@@ -318,7 +340,7 @@ For visual assets (`.svg`, `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`):
 
 ---
 
-### 15.4. Download Cards for Other File Types
+### 16.4. Download Cards for Other File Types
 
 ![Downloadable File Card](images/screenshot_artifact_download.png)
 
@@ -329,7 +351,7 @@ For non-visual or data files (e.g. `security_audit_report.json`, `.csv`, `.pdf`,
 
 ---
 
-## 16. Real-Time USD Cost & Token Tracking
+## 17. Real-Time USD Cost & Token Tracking
 
 Even though your agents execute on flat subscriptions, developers need visibility into resource consumption:
 - **Header Cost Widget**: Shows total compute cost (e.g. `💵 $0.20 USD (65.6k tokens)`).
@@ -337,7 +359,54 @@ Even though your agents execute on flat subscriptions, developers need visibilit
 
 ---
 
-## 17. Session Customizations (Plugins, Skills, Custom MCP)
+## 18. Global Application-Level Configuration (SettingsView)
+
+Smith includes a centralized **Application Configuration** dashboard to manage host-level settings, binary paths, memory engine parameters, and workspace defaults.
+
+Access the configuration page by clicking **"App Configuration"** in the sidebar footer or the **Gear icon** in the top navigation bar.
+
+### 18.1. Agent Binaries Tab
+![Agent Binaries Configuration](images/screenshot_settings_agent_binaries.png)
+
+Configure exact executable paths and harnesses used for ACP workers:
+- **Claude Code CLI**: Path to the `claude` executable (e.g., `C:\Users\...\AppData\Roaming\npm\claude.cmd`).
+- **Google Antigravity Language Server / CLI**: Path to `language_server.exe` or `agy-node.cmd`.
+- **OpenCode CLI**: Path to `opencode` harness.
+- **Astral `uv` / `uvx`**: Path to `uv.exe` (required for embedded Hindsight daemon).
+- **Auto-Detection**: Click **"Use Auto-Detected"** next to any binary to apply the path discovered by Smith's system scanner.
+- **On-Disk Verification**: Click **"Verify"** to test whether the executable exists on disk and is runnable (`POST /api/v1/system/config/probe-binary`).
+
+---
+
+### 18.2. Vectorize Hindsight Tab
+![Vectorize Hindsight Configuration](images/screenshot_settings_hindsight.png)
+
+Configure the official Vectorize Hindsight daemon for cross-session episodic memory:
+- **Hindsight LLM Provider**: Dropdown selection supporting **OpenAI (GPT-4o, GPT-4.1)**, **Anthropic (Claude Sonnet / Opus)**, **Google Gemini (2.5 Pro / Flash)**, **Ollama (Local LLM)**, **Azure OpenAI**, or a **Custom Provider**.
+- **Default Knowledge Bank**: Primary memory bank identifier (default: `smith-ade-global`).
+- **Provider API Key / Secret Token**: Secure masked input with eye visibility toggle (`sk-proj-...`). Injected into the embedded daemon environment as `HINDSIGHT_API_LLM_API_KEY`.
+- **Server URL**: URL of the local embedded daemon or remote Hindsight instance (default: `http://localhost:8888`).
+- **Test Connection**: Live latency test button (`POST /api/v1/system/config/test-hindsight`) that verifies connectivity and displays ping latency in milliseconds.
+- **Auto-Start Embedded Daemon**: Checkbox toggle supervising `uvx hindsight-embed` on startup.
+
+---
+
+### 18.3. App & Workspace Tab
+![App & Workspace Configuration](images/screenshot_settings_app_workspace.png)
+
+Manage repository and financial defaults:
+- **Git Executable Path**: Path to `git.exe` with real-time verification.
+- **Default Workspace Root**: Default folder path pre-populated when creating new sessions.
+- **Server HTTP Port**: HTTP port for the orchestrator server (default: `4100`).
+- **Display Currency**: Choose between `USD ($)`, `EUR (€)`, `GBP (£)`, and `JPY (¥)`.
+- **Budget Alert Threshold**: Maximum financial compute threshold before warning alerts trigger.
+
+> [!NOTE]
+> All settings are stored in `~/.smith/config.json` and hot-applied to running agent adapters without requiring a full app restart.
+
+---
+
+## 19. Session Customizations (Plugins, Skills, Custom MCP)
 
 ![Customizations Drawer](images/screenshot_goal_chat_customizations.png)
 
@@ -348,15 +417,23 @@ Click the **Sliders** icon in the header to configure session capabilities:
 
 ---
 
-## 18. REST & WebSocket API Guide
+## 20. REST & WebSocket API Guide
 
 ![Swagger API Documentation](images/screenshot_api_docs.png)
 
 Smith is 100% API-first. You can control everything programmatically:
 
 ### Key API Endpoints (`/api/v1`)
+- `GET /api/v1/system/config`: Retrieve global app configuration, agent binary paths, and Hindsight settings.
+- `PUT /api/v1/system/config`: Save and hot-apply application configuration.
+- `POST /api/v1/system/config/probe-binary`: Verify binary path existence and execution capability on host disk.
+- `POST /api/v1/system/config/test-hindsight`: Test Hindsight server connectivity and measure response latency.
+- `GET /api/v1/sessions`: List all persisted sessions with cost and worktree metadata.
+- `POST /api/v1/sessions`: Create a new session with isolated Git worktree, worker agents, and memory bank.
+- `DELETE /api/v1/sessions/:id`: Terminate session agents, remove isolated worktree, and delete session metadata.
 - `GET /api/v1/sessions/:id/chat`: Full chronological chat timeline for the single chat interface.
 - `POST /api/v1/sessions/:id/goal`: Declare a goal and trigger cooperative multi-agent execution.
+- `POST /api/v1/sessions/:id/chat/answer`: Submit answers to agent interactive questionnaire prompts (`ask_question`).
 - `GET /api/v1/sessions/:id/worktree/summary`: Structured per-file diff summary and merge check.
 - `GET /api/v1/sessions/:id/worktree/file?path=<path>&download=1`: Stream or download worktree files with strict directory traversal validation.
 - `GET /api/v1/sessions/:id/worktree/artifacts`: List all generated artifacts (images, HTML, Mermaid, reports) with detected types.
@@ -369,7 +446,8 @@ Smith is 100% API-first. You can control everything programmatically:
 - `POST /api/v1/system/pty/create`: Spawn an interactive ConPTY session for auth or CLI commands.
 - `GET /api/v1/health`: Server health, Git status, agent health statuses, and Hindsight connectivity.
 - `GET /api/v1/system/agents/status`: Live probed agent authentication and rate limit diagnostics.
-- `GET /api/v1/system/agents/status`: Live probed agent authentication and rate limit diagnostics.
+- `GET /api/v1/system/models`: Discovered models across authenticated agent harnesses.
+- `POST /api/v1/system/models/refresh`: Force re-probe of agent models.
 
 Interactive Swagger UI: `http://localhost:4100/api/docs`  
 OpenAPI 3.0 JSON: `http://localhost:4100/api/v1/openapi.json`
