@@ -128,6 +128,7 @@ jobs:
       - name: Download all built artifacts
         uses: actions/download-artifact@v4
         with:
+          pattern: electron-binaries-*
           path: release-packages
           merge-multiple: true
 
