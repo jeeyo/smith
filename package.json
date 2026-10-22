@@ -1,6 +1,6 @@
 {
   "name": "smith",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Smith - API-first Cooperative Agentic Development Environment (ADE)",
   "type": "module",
   "main": "dist-electron/main.cjs",
