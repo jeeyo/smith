@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 650" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b0f19"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="650" rx="16" fill="url(#bg)" stroke="#334155" stroke-width="2"/>
+
+  <!-- Header -->
+  <text x="40" y="50" fill="#f8fafc" font-family="Inter, sans-serif" font-weight="bold" font-size="20">Cooperative Playbook DAG (arXiv:2610.22319)</text>
+  <text x="40" y="75" fill="#94a3b8" font-family="Inter, sans-serif" font-size="13">Non-racing task negotiation, atomic leases, and file-scope locking with USD resource tracking</text>
+
+  <!-- Task Card 1: Completed -->
+  <g transform="translate(40, 110)">
+    <rect width="1120" height="95" rx="12" fill="#090d16" stroke="#334155" stroke-width="1.5"/>
+    <text x="25" y="35" fill="#e2e8f0" font-family="Inter, sans-serif" font-weight="bold" font-size="15">Phase 1: Architecture &amp; Token Specifications</text>
+    <rect x="360" y="18" width="65" height="22" rx="11" fill="#064e3b" stroke="#059669"/>
+    <text x="375" y="33" fill="#34d399" font-family="Inter, sans-serif" font-size="11" font-weight="bold">✔ Done</text>
+    <rect x="435" y="18" width="75" height="22" rx="6" fill="#1e293b"/>
+    <text x="445" y="33" fill="#38bdf8" font-family="Inter, sans-serif" font-size="11">@claude</text>
+    <text x="25" y="62" fill="#94a3b8" font-family="Inter, sans-serif" font-size="12">Designed Ed25519 token rotation model and retained decisions into Hindsight memory.</text>
+    
+    <!-- Lock & Cost -->
+    <text x="25" y="82" fill="#64748b" font-family="JetBrains Mono, monospace" font-size="11">Scope: src/auth/types.ts</text>
+    <rect x="1000" y="25" width="95" height="26" rx="8" fill="#064e3b"/>
+    <text x="1015" y="42" fill="#6ee7b7" font-family="JetBrains Mono, monospace" font-size="12" font-weight="bold">$0.06 USD</text>
+  </g>
+
+  <!-- Task Card 2: In Progress (Locked) -->
+  <g transform="translate(40, 225)">
+    <rect width="1120" height="110" rx="12" fill="#082f49" fill-opacity="0.2" stroke="#0284c7" stroke-width="2"/>
+    <text x="25" y="35" fill="#f8fafc" font-family="Inter, sans-serif" font-weight="bold" font-size="15">Phase 2: Implement Route Guards &amp; Middleware</text>
+    <rect x="395" y="18" width="95" height="22" rx="11" fill="#0c4a6e" stroke="#0284c7"/>
+    <text x="407" y="33" fill="#38bdf8" font-family="Inter, sans-serif" font-size="11" font-weight="bold">▶ In Progress</text>
+    <rect x="500" y="18" width="75" height="22" rx="6" fill="#1e293b"/>
+    <text x="510" y="33" fill="#38bdf8" font-family="Inter, sans-serif" font-size="11">@claude</text>
+    <text x="25" y="62" fill="#94a3b8" font-family="Inter, sans-serif" font-size="12">Scaffolding authentication middleware and token verification logic.</text>
+    
+    <!-- Lock Badge -->
+    <rect x="25" y="74" width="220" height="22" rx="4" fill="#450a0a" stroke="#991b1b"/>
+    <text x="35" y="89" fill="#f87171" font-family="JetBrains Mono, monospace" font-size="11">🔒 LOCKED: src/middleware/*</text>
+    
+    <rect x="990" y="25" width="105" height="26" rx="8" fill="#082f49"/>
+    <text x="1005" y="42" fill="#38bdf8" font-family="JetBrains Mono, monospace" font-size="12" font-weight="bold">$0.16 USD</text>
+
+    <!-- Action Buttons -->
+    <rect x="970" y="65" width="125" height="32" rx="8" fill="#16a34a"/>
+    <text x="985" y="85" fill="#ffffff" font-family="Inter, sans-serif" font-size="12" font-weight="bold">Mark Complete</text>
+  </g>
+
+  <!-- Task Card 3: Blocked by Dependencies -->
+  <g transform="translate(40, 355)">
+    <rect width="1120" height="95" rx="12" fill="#090d16" stroke="#1e293b" stroke-width="1.5"/>
+    <text x="25" y="35" fill="#cbd5e1" font-family="Inter, sans-serif" font-weight="bold" font-size="15">Phase 3: Integration Test Suite (Delegated to Codex)</text>
+    <rect x="425" y="18" width="75" height="22" rx="11" fill="#451a03" stroke="#b45309"/>
+    <text x="438" y="33" fill="#fbbf24" font-family="Inter, sans-serif" font-size="11" font-weight="bold">🔒 Blocked</text>
+    <text x="25" y="62" fill="#64748b" font-family="Inter, sans-serif" font-size="12">Depends on Phase 2 completion. Will execute automatically under @codex once locks are released.</text>
+    <text x="25" y="82" fill="#64748b" font-family="JetBrains Mono, monospace" font-size="11">Scope: tests/auth.test.ts</text>
+  </g>
+
+  <!-- Task Card 4: Unassigned -->
+  <g transform="translate(40, 470)">
+    <rect width="1120" height="95" rx="12" fill="#090d16" stroke="#1e293b" stroke-width="1.5"/>
+    <text x="25" y="35" fill="#cbd5e1" font-family="Inter, sans-serif" font-weight="bold" font-size="15">Phase 4: Security Audit &amp; Documentation</text>
+    <rect x="375" y="18" width="95" height="22" rx="11" fill="#1e293b" stroke="#475569"/>
+    <text x="388" y="33" fill="#94a3b8" font-family="Inter, sans-serif" font-size="11">Unassigned</text>
+    <text x="25" y="62" fill="#64748b" font-family="Inter, sans-serif" font-size="12">Review token expiration headers, rate limiting, and write API OpenAPI documentation.</text>
+    
+    <rect x="990" y="30" width="105" height="32" rx="8" fill="#0284c7"/>
+    <text x="1005" y="51" fill="#ffffff" font-family="Inter, sans-serif" font-size="12" font-weight="bold">Claim Task</text>
+  </g>
+</svg>

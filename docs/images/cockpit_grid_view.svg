@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b0f19"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="cardBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="btnGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0284c7"/>
+      <stop offset="100%" stop-color="#4f46e5"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Window Frame -->
+  <rect width="1200" height="700" rx="16" fill="url(#bg)" stroke="#334155" stroke-width="2"/>
+
+  <!-- Top Navigation Bar -->
+  <rect x="0" y="0" width="1200" height="60" fill="#090d16" stroke="#1e293b" stroke-width="1"/>
+  
+  <!-- Window Controls -->
+  <circle cx="25" cy="30" r="6" fill="#ef4444"/>
+  <circle cx="45" cy="30" r="6" fill="#f59e0b"/>
+  <circle cx="65" cy="30" r="6" fill="#10b981"/>
+
+  <!-- Brand -->
+  <rect x="90" y="16" width="28" height="28" rx="8" fill="url(#btnGrad)"/>
+  <text x="128" y="35" fill="#f8fafc" font-family="Inter, sans-serif" font-weight="bold" font-size="16">Smith</text>
+  <rect x="175" y="21" width="38" height="18" rx="4" fill="#082f49" stroke="#0369a1"/>
+  <text x="182" y="34" fill="#38bdf8" font-family="JetBrains Mono, monospace" font-size="10" font-weight="bold">ADE</text>
+
+  <!-- Active Session Pill -->
+  <text x="235" y="35" fill="#94a3b8" font-family="Inter, sans-serif" font-size="13">Auth Service Refactor</text>
+  <rect x="380" y="20" width="130" height="20" rx="10" fill="#1e293b" stroke="#334155"/>
+  <text x="395" y="34" fill="#38bdf8" font-family="JetBrains Mono, monospace" font-size="11">smith/auth-jwt</text>
+
+  <!-- Navigation View Buttons -->
+  <rect x="540" y="14" width="280" height="32" rx="8" fill="#1e293b"/>
+  <rect x="544" y="18" width="80" height="24" rx="6" fill="#0284c7"/>
+  <text x="560" y="34" fill="#ffffff" font-family="Inter, sans-serif" font-size="11" font-weight="bold">Grid View</text>
+  <text x="638" y="34" fill="#94a3b8" font-family="Inter, sans-serif" font-size="11">Playbook</text>
+  <text x="702" y="34" fill="#94a3b8" font-family="Inter, sans-serif" font-size="11">Team Chat</text>
+  <text x="768" y="34" fill="#94a3b8" font-family="Inter, sans-serif" font-size="11">Memory</text>
+
+  <!-- Status Badges & Cost -->
+  <rect x="835" y="17" width="125" height="26" rx="8" fill="#022c22" stroke="#065f46"/>
+  <circle cx="848" cy="30" r="4" fill="#10b981"/>
+  <text x="858" y="34" fill="#34d399" font-family="Inter, sans-serif" font-size="10" font-weight="bold">Hindsight Connected</text>
+
+  <!-- Cost Widget -->
+  <rect x="970" y="17" width="115" height="26" rx="8" fill="#064e3b" stroke="#059669"/>
+  <text x="980" y="34" fill="#6ee7b7" font-family="JetBrains Mono, monospace" font-size="11" font-weight="bold">$0.34 USD</text>
+  <text x="1045" y="34" fill="#a7f3d0" font-family="Inter, sans-serif" font-size="9">(45k)</text>
+
+  <rect x="1095" y="17" width="90" height="26" rx="8" fill="url(#btnGrad)"/>
+  <text x="1108" y="34" fill="#ffffff" font-family="Inter, sans-serif" font-size="11" font-weight="bold">+ New Session</text>
+
+  <!-- Grid View: 2 Panes Side by Side -->
+  <!-- Pane 1: Claude Code -->
+  <g transform="translate(20, 75)">
+    <rect width="570" height="605" rx="14" fill="#090d16" stroke="#1e293b" stroke-width="1.5"/>
+    <!-- Pane Header -->
+    <rect width="570" height="48" rx="14" fill="#0f172a"/>
+    <rect x="15" y="12" width="24" height="24" rx="6" fill="#334155"/>
+    <text x="21" y="28" fill="#38bdf8" font-family="Inter, sans-serif" font-weight="bold" font-size="12">CL</text>
+    <text x="48" y="29" fill="#f8fafc" font-family="Inter, sans-serif" font-weight="bold" font-size="14">Claude</text>
+    <rect x="108" y="16" width="68" height="18" rx="9" fill="#082f49" stroke="#0284c7"/>
+    <text x="118" y="29" fill="#38bdf8" font-family="Inter, sans-serif" font-size="10">Thinking...</text>
+
+    <!-- Model Selector Pill (Hot-Reload) -->
+    <rect x="340" y="14" width="135" height="22" rx="11" fill="#1e293b" stroke="#38bdf8"/>
+    <text x="352" y="29" fill="#38bdf8" font-family="JetBrains Mono, monospace" font-size="10">⚡ claude-3-7-sonnet ▾</text>
+
+    <!-- Agent Cost Badge -->
+    <rect x="485" y="14" width="70" height="22" rx="11" fill="#064e3b" stroke="#059669"/>
+    <text x="495" y="29" fill="#6ee7b7" font-family="JetBrains Mono, monospace" font-size="10" font-weight="bold">💰 $0.22</text>
+
+    <!-- ACP Stream Body -->
+    <rect x="15" y="65" width="540" height="475" rx="8" fill="#050811"/>
+    <text x="30" y="95" fill="#38bdf8" font-family="JetBrains Mono, monospace" font-size="11">CLAUDE [ACP STREAM]:</text>
+    <text x="30" y="120" fill="#94a3b8" font-family="JetBrains Mono, monospace" font-size="11">I am analyzing src/auth/jwt.ts to implement refresh tokens.</text>
+    <text x="30" y="145" fill="#94a3b8" font-family="JetBrains Mono, monospace" font-size="11">Retaining architecture decision into Hindsight: Ed25519 chosen.</text>
+    <text x="30" y="170" fill="#34d399" font-family="JetBrains Mono, monospace" font-size="11">✔ Task claimed: Task #1 (Auth Scaffolding)</text>
+    <text x="30" y="195" fill="#f59e0b" font-family="JetBrains Mono, monospace" font-size="11">🔒 Exclusive file lock acquired: src/auth/*</text>
+    
+    <!-- Code Box -->
+    <rect x="30" y="215" width="510" height="110" rx="6" fill="#0f172a" stroke="#1e293b"/>
+    <text x="45" y="240" fill="#f43f5e" font-family="JetBrains Mono, monospace" font-size="11">export async function <tspan fill="#38bdf8">signRefreshToken</tspan>(userId: string) {</text>
+    <text x="60" y="265" fill="#94a3b8" font-family="JetBrains Mono, monospace" font-size="11">return jwt.sign({ sub: userId }, SECRET, { expiresIn: '7d' });</text>
+    <text x="45" y="290" fill="#f43f5e" font-family="JetBrains Mono, monospace" font-size="11">}</text>
+
+    <!-- Permission Box -->
+    <rect x="30" y="340" width="510" height="90" rx="8" fill="#450a0a" stroke="#991b1b"/>
+    <text x="45" y="365" fill="#f87171" font-family="Inter, sans-serif" font-weight="bold" font-size="11">PERMISSION REQUEST: Execute npm test in worktree?</text>
+    <rect x="45" y="380" width="80" height="26" rx="6" fill="#16a34a"/>
+    <text x="65" y="397" fill="#ffffff" font-family="Inter, sans-serif" font-size="11" font-weight="bold">Approve</text>
+    <rect x="135" y="380" width="60" height="26" rx="6" fill="#dc2626"/>
+    <text x="150" y="397" fill="#ffffff" font-family="Inter, sans-serif" font-size="11" font-weight="bold">Deny</text>
+
+    <!-- Prompt Input Form -->
+    <rect x="15" y="555" width="470" height="38" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="30" y="579" fill="#64748b" font-family="Inter, sans-serif" font-size="12">Instruct Claude (claude-3-7-sonnet)...</text>
+    <rect x="495" y="555" width="60" height="38" rx="8" fill="#0284c7"/>
+    <text x="512" y="579" fill="#ffffff" font-family="Inter, sans-serif" font-size="12" font-weight="bold">Send</text>
+  </g>
+
+  <!-- Pane 2: OpenAI Codex / Gemini -->
+  <g transform="translate(610, 75)">
+    <rect width="570" height="605" rx="14" fill="#090d16" stroke="#1e293b" stroke-width="1.5"/>
+    <!-- Pane Header -->
+    <rect width="570" height="48" rx="14" fill="#0f172a"/>
+    <rect x="15" y="12" width="24" height="24" rx="6" fill="#334155"/>
+    <text x="20" y="28" fill="#10b981" font-family="Inter, sans-serif" font-weight="bold" font-size="12">CX</text>
+    <text x="48" y="29" fill="#f8fafc" font-family="Inter, sans-serif" font-weight="bold" font-size="14">Codex</text>
+    <rect x="108" y="16" width="55" height="18" rx="9" fill="#064e3b" stroke="#059669"/>
+    <text x="122" y="29" fill="#34d399" font-family="Inter, sans-serif" font-size="10">Idle</text>
+
+    <!-- Model Selector Pill (Hot-Reload) -->
+    <rect x="365" y="14" width="110" height="22" rx="11" fill="#1e293b" stroke="#38bdf8"/>
+    <text x="377" y="29" fill="#38bdf8" font-family="JetBrains Mono, monospace" font-size="10">⚡ o3-mini ▾</text>
+
+    <!-- Agent Cost Badge -->
+    <rect x="485" y="14" width="70" height="22" rx="11" fill="#064e3b" stroke="#059669"/>
+    <text x="495" y="29" fill="#6ee7b7" font-family="JetBrains Mono, monospace" font-size="10" font-weight="bold">💰 $0.12</text>
+
+    <!-- ACP Stream Body -->
+    <rect x="15" y="65" width="540" height="475" rx="8" fill="#050811"/>
+    <text x="30" y="95" fill="#10b981" font-family="JetBrains Mono, monospace" font-size="11">CODEX [ACP STREAM]:</text>
+    <text x="30" y="120" fill="#94a3b8" font-family="JetBrains Mono, monospace" font-size="11">Listening to inter-agent broadcast bus.</text>
+    <text x="30" y="145" fill="#f59e0b" font-family="JetBrains Mono, monospace" font-size="11">Notice: Task #1 is locked by @claude (src/auth/*).</text>
+    <text x="30" y="170" fill="#94a3b8" font-family="JetBrains Mono, monospace" font-size="11">Zero racing: Standing by for Task #2 (Write Integration Tests).</text>
+    <text x="30" y="195" fill="#a855f7" font-family="JetBrains Mono, monospace" font-size="11">Recalled Hindsight Anti-Pattern: &quot;Avoid require() in ESM tests; use import&quot;.</text>
+
+    <!-- Prompt Input Form -->
+    <rect x="15" y="555" width="470" height="38" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="30" y="579" fill="#64748b" font-family="Inter, sans-serif" font-size="12">Instruct Codex (o3-mini)...</text>
+    <rect x="495" y="555" width="60" height="38" rx="8" fill="#0284c7"/>
+    <text x="512" y="579" fill="#ffffff" font-family="Inter, sans-serif" font-size="12" font-weight="bold">Send</text>
+  </g>
+</svg>

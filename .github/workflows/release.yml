@@ -1,0 +1,101 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Packages (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            builder-args: --win
+          - os: ubuntu-latest
+            builder-args: --linux
+          - os: macos-latest
+            builder-args: --mac
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run build
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build Electron distributions
+        run: npx electron-builder ${{ matrix.builder-args }} --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-binaries-${{ matrix.os }}
+          path: |
+            release/*.exe
+            release/*.zip
+            release/*.dmg
+            release/*.AppImage
+            release/*.tar.gz
+          if-no-files-found: ignore
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: extract_version
+        run: |
+          TAG="${{ github.ref_name }}"
+          # Extract semantic version by stripping leading 'v'
+          VERSION="${TAG#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Target Release Version: ${VERSION} (from tag: ${TAG})"
+
+      - name: Download all built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-packages
+          merge-multiple: true
+
+      - name: Inspect release packages
+        run: ls -la release-packages
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release v${{ steps.extract_version.outputs.version }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            release-packages/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
