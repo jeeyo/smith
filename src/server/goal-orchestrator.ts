@@ -147,9 +147,9 @@ export class GoalOrchestrator extends EventEmitter {
       }
     }
 
-    // Determine healthy agents for allocation & fallbacks
+    // Determine healthy agents for allocation & fallbacks (prioritize antigravity as fallback)
     const readyAgents = (Object.keys(healthStatuses) as AgentId[]).filter(id => healthStatuses[id]?.status === 'ready');
-    const fallbackAgent: AgentId = readyAgents.length > 0 ? readyAgents[0] : 'antigravity';
+    const fallbackAgent: AgentId = readyAgents.includes('antigravity') ? 'antigravity' : (readyAgents[0] || 'antigravity');
 
     // 4. Plan generation: Delta planning vs Macro-goal decomposition
     let subtaskPlans: PlannedSubtask[];

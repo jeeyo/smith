@@ -15,7 +15,17 @@ export class WorktreeManager {
   }
 
   private async runGit(cmd: string, cwd: string): Promise<{ stdout: string; stderr: string }> {
-    return execAsync(`${this.gitPath} ${cmd}`, { cwd, maxBuffer: 10 * 1024 * 1024 });
+    return execAsync(`${this.gitPath} ${cmd}`, {
+      cwd,
+      maxBuffer: 10 * 1024 * 1024,
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: process.env.GIT_AUTHOR_NAME || 'Smith ADE',
+        GIT_AUTHOR_EMAIL: process.env.GIT_AUTHOR_EMAIL || 'smith@ade.local',
+        GIT_COMMITTER_NAME: process.env.GIT_COMMITTER_NAME || 'Smith ADE',
+        GIT_COMMITTER_EMAIL: process.env.GIT_COMMITTER_EMAIL || 'smith@ade.local'
+      }
+    });
   }
 
   async ensureGitRepo(repoPath: string): Promise<boolean> {

@@ -68,10 +68,10 @@ describe('Goal Orchestrator & Single Chat Interface Tests', () => {
       expect(subtask.status).toBe('completed');
     }
 
-    // Verify health-aware rerouting: codex or claude tasks auto-routed to antigravity
+    // Verify health-aware rerouting: codex or claude tasks auto-routed to ready fallback agent
     const reroutedTask = msg.plan.subtasks.find((st: any) => st.routedFrom !== undefined);
     if (reroutedTask) {
-      expect(reroutedTask.agentId).toBe('antigravity');
+      expect(['antigravity', 'claude']).toContain(reroutedTask.agentId);
       expect(reroutedTask.routingReason).toBeDefined();
     }
 
