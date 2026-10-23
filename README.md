@@ -27,7 +27,26 @@ Smith ADE is a high-performance, API-first **Cooperative Agentic Development Env
 
 ## 🚀 Quick Start
 
-### Option A: Running with Docker (Recommended for Servers & Headless)
+### Option A: Installing on macOS via Homebrew (Desktop App)
+
+Install Smith ADE directly onto macOS via Homebrew Cask:
+
+```bash
+brew install --cask jeeyo/tap/smith
+```
+
+Or tap the repository first:
+
+```bash
+brew tap jeeyo/tap
+brew install --cask smith
+```
+
+This installs `Smith ADE.app` into `/Applications` and creates a `smith` CLI alias in your terminal.
+
+---
+
+### Option B: Running with Docker (Recommended for Servers & Headless)
 
 Smith ADE is published as a multi-architecture (`linux/amd64` and `linux/arm64`) Docker container with Node.js 22, Astral `uv`/`uvx`, and Vectorize Hindsight pre-installed and ready out of the box:
 
