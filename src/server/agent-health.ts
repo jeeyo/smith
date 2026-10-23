@@ -7,6 +7,16 @@ export class AgentHealthEngine {
   private isProbing: boolean = false;
 
   constructor() {
+    const now = Date.now();
+    const defaults: Record<AgentId, AgentHealthStatus> = {
+      claude: { agentId: 'claude', name: 'Claude Code', installed: true, authenticated: true, status: 'ready', message: 'Ready', lastCheckedAt: now },
+      antigravity: { agentId: 'antigravity', name: 'Google Antigravity', installed: true, authenticated: true, status: 'ready', message: 'Ready', lastCheckedAt: now },
+      codex: { agentId: 'codex', name: 'OpenAI Codex', installed: true, authenticated: true, status: 'ready', message: 'Ready', lastCheckedAt: now },
+      opencode: { agentId: 'opencode', name: 'OpenCode', installed: true, authenticated: true, status: 'ready', message: 'Ready', lastCheckedAt: now }
+    };
+    for (const [id, s] of Object.entries(defaults)) {
+      this.cache.set(id as AgentId, s);
+    }
     this.probeAll().catch(() => {});
   }
 

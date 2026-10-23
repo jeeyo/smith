@@ -96,6 +96,19 @@ function detectDefaultBinaries(): Record<string, string> {
   const npmOpencode = path.join(appData, 'npm', 'opencode.cmd');
   if (fs.existsSync(npmOpencode)) detected.opencode = npmOpencode;
 
+  // OpenAI Codex
+  const codexDir = path.join(localAppData, 'OpenAI', 'Codex');
+  if (fs.existsSync(codexDir)) {
+    try {
+      const match = findBinary(codexDir, 'codex.exe', 5);
+      if (match) detected.codex = match;
+    } catch {}
+  }
+  const npmCodex = path.join(appData, 'npm', 'codex.cmd');
+  if (!detected.codex && fs.existsSync(npmCodex)) {
+    detected.codex = npmCodex;
+  }
+
   // Astral uv
   const uvPath = path.join(localAppData, 'Programs', 'uv', 'uv.exe');
   const userUv = path.join(os.homedir(), '.local', 'bin', 'uv.exe');
@@ -121,7 +134,9 @@ const initialAgentBinaries: Record<string, string> = {
   claude: persistedConfig.agentBinaries?.claude || detected.claude || 'claude',
   antigravity: persistedConfig.agentBinaries?.antigravity || detected.antigravity || 'language_server.exe',
   opencode: persistedConfig.agentBinaries?.opencode || detected.opencode || 'opencode',
-  codex: persistedConfig.agentBinaries?.codex || 'codex',
+  codex: (persistedConfig.agentBinaries?.codex && persistedConfig.agentBinaries.codex !== 'codex')
+    ? persistedConfig.agentBinaries.codex
+    : (detected.codex || persistedConfig.agentBinaries?.codex || 'codex'),
   uv: persistedConfig.agentBinaries?.uv || detected.uv || 'uv'
 };
 

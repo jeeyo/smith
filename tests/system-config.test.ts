@@ -1,9 +1,28 @@
-import { describe, it, expect, afterAll } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { app, server } from '../src/server/index.ts';
 
 describe('App-Level Configuration System Tests', () => {
+  const configFile = path.join(os.homedir(), '.smith', 'config.json');
+  let backupConfig: string | null = null;
+
+  beforeAll(() => {
+    if (fs.existsSync(configFile)) {
+      try {
+        backupConfig = fs.readFileSync(configFile, 'utf-8');
+      } catch {}
+    }
+  });
+
   afterAll(() => {
+    if (backupConfig !== null) {
+      try {
+        fs.writeFileSync(configFile, backupConfig, 'utf-8');
+      } catch {}
+    }
     server.close();
   });
 
