@@ -255,4 +255,36 @@ describe('Goal Orchestrator & Single Chat Interface Tests', () => {
     // Clean up
     fs.rmSync(artifactsDir, { recursive: true, force: true });
   });
+
+  it('chat histories are persisted to disk and reloaded after restart', () => {
+    const testSessionId = `test-persist-${Date.now()}`;
+    const testMessages = [
+      {
+        id: 'msg-1',
+        sender: 'user' as const,
+        content: 'Persistent chat message test',
+        timestamp: Date.now()
+      },
+      {
+        id: 'msg-2',
+        sender: 'orchestrator' as const,
+        content: 'Persistent chat response test',
+        timestamp: Date.now() + 10,
+        status: 'completed' as const
+      }
+    ];
+
+    goalOrchestrator.setChatHistory(testSessionId, testMessages);
+
+    // Verify written to disk and can be read by fresh orchestrator
+    const freshOrchestrator = new (goalOrchestrator.constructor as any)();
+    const reloaded = freshOrchestrator.getChatHistory(testSessionId);
+    expect(reloaded.length).toBe(2);
+    expect(reloaded[0].content).toBe('Persistent chat message test');
+    expect(reloaded[1].content).toBe('Persistent chat response test');
+
+    // Clean up
+    freshOrchestrator.deleteChatHistory(testSessionId);
+    expect(freshOrchestrator.getChatHistory(testSessionId).length).toBe(0);
+  });
 });

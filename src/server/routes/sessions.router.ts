@@ -208,6 +208,10 @@ sessionsRouter.delete('/sessions/:id', async (req, res) => {
   if (fs.existsSync(filePath)) {
     fs.unlinkSync(filePath);
   }
+  const chatFilePath = path.join(config.storageDir, 'chats', `${session.id}.json`);
+  if (fs.existsSync(chatFilePath)) {
+    try { fs.unlinkSync(chatFilePath); } catch {}
+  }
 
   res.json({ status: 'terminated', sessionId: req.params.id });
 });
@@ -237,6 +241,12 @@ sessionsRouter.post('/sessions/batch-delete', async (req, res) => {
       if (fs.existsSync(filePath)) {
         try {
           fs.unlinkSync(filePath);
+        } catch {}
+      }
+      const chatFilePath = path.join(config.storageDir, 'chats', `${session.id}.json`);
+      if (fs.existsSync(chatFilePath)) {
+        try {
+          fs.unlinkSync(chatFilePath);
         } catch {}
       }
       deleted.push(id);

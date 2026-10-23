@@ -130,9 +130,12 @@ export const App: React.FC = () => {
     try {
       const res = await fetch('/api/v1/sessions');
       const data = await res.json();
-      setSessions(data.sessions || []);
-      if (data.sessions && data.sessions.length > 0 && !currentSession) {
-        selectSession(data.sessions[0]);
+      const sessionList: Session[] = data.sessions || [];
+      setSessions(sessionList);
+      if (sessionList.length > 0 && !currentSession) {
+        const lastActiveId = localStorage.getItem('smith_active_session_id');
+        const matched = sessionList.find(s => s.id === lastActiveId);
+        selectSession(matched || sessionList[0]);
       }
     } catch (err) {
       console.error(err);
@@ -141,6 +144,9 @@ export const App: React.FC = () => {
 
   const selectSession = async (session: Session) => {
     setCurrentSession(session);
+    try {
+      localStorage.setItem('smith_active_session_id', session.id);
+    } catch {}
     fetchChat(session.id);
     fetchCost(session.id);
   };

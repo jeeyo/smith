@@ -10,6 +10,7 @@ import { agentHealthEngine } from './agent-health.ts';
 import { worktreeManager } from './worktree-manager.ts';
 import { getSession } from './routes/sessions.router.ts';
 import { classifyArtifactType, MIME_MAP } from './routes/worktree.router.ts';
+import { config } from './config.ts';
 import { sessionMemoryService } from './session-memory.ts';
 import { broadcastLayerService } from './broadcast-layer.ts';
 import { observerAgentService } from './observer-agent.ts';
@@ -49,17 +50,58 @@ export interface PlannedSubtask {
 
 export class GoalOrchestrator extends EventEmitter {
   private chatHistories: Map<string, GoalChatMessage[]> = new Map();
+  private chatStorageDir: string;
 
   constructor() {
     super();
+    this.chatStorageDir = path.join(config.storageDir, 'chats');
+    if (!fs.existsSync(this.chatStorageDir)) {
+      try {
+        fs.mkdirSync(this.chatStorageDir, { recursive: true });
+      } catch {}
+    }
   }
 
   public getChatHistory(sessionId: string): GoalChatMessage[] {
+    if (!this.chatHistories.has(sessionId)) {
+      const filePath = path.join(this.chatStorageDir, `${sessionId}.json`);
+      if (fs.existsSync(filePath)) {
+        try {
+          const raw = fs.readFileSync(filePath, 'utf-8');
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            this.chatHistories.set(sessionId, parsed);
+            return parsed;
+          }
+        } catch (err) {
+          console.warn(`Failed to read chat history for session ${sessionId}:`, err);
+        }
+      }
+    }
     return this.chatHistories.get(sessionId) || [];
   }
 
   public setChatHistory(sessionId: string, history: GoalChatMessage[]) {
     this.chatHistories.set(sessionId, history);
+    try {
+      if (!fs.existsSync(this.chatStorageDir)) {
+        fs.mkdirSync(this.chatStorageDir, { recursive: true });
+      }
+      const filePath = path.join(this.chatStorageDir, `${sessionId}.json`);
+      fs.writeFileSync(filePath, JSON.stringify(history, null, 2), 'utf-8');
+    } catch (err) {
+      console.error(`Failed to persist chat history for session ${sessionId}:`, err);
+    }
+  }
+
+  public deleteChatHistory(sessionId: string) {
+    this.chatHistories.delete(sessionId);
+    try {
+      const filePath = path.join(this.chatStorageDir, `${sessionId}.json`);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch {}
   }
 
   /**
@@ -83,7 +125,7 @@ export class GoalOrchestrator extends EventEmitter {
       throw new Error(`Session ${sessionId} not found`);
     }
 
-    const history = this.chatHistories.get(sessionId) || [];
+    const history = this.getChatHistory(sessionId);
 
     // Check if this is a follow-up conversational delta (follows an existing executed plan)
     const priorCompleted = history.filter(m => m.sender === 'orchestrator' && m.status === 'completed' && m.plan !== undefined);
@@ -353,7 +395,7 @@ export class GoalOrchestrator extends EventEmitter {
     };
 
     history.push(responseMessage);
-    this.chatHistories.set(sessionId, history);
+    this.setChatHistory(sessionId, history);
 
     const emitUpdate = (type: string, payload: any) => {
       this.emit(type, { sessionId, ...payload });
@@ -679,7 +721,7 @@ Please implement the solution for this task directly in this workspace. Create a
       });
     }
 
-    this.chatHistories.set(sessionId, history);
+    this.setChatHistory(sessionId, history);
     emitUpdate(executionAborted ? 'goal:task_progress' : 'goal:completed', { message: responseMessage });
 
     return responseMessage;
@@ -696,7 +738,7 @@ Please implement the solution for this task directly in this workspace. Create a
     selectedOptions: string[],
     customAnswer?: string
   ): Promise<{ question: InteractiveQuestion; replyMessage: GoalChatMessage }> {
-    const history = this.chatHistories.get(sessionId) || [];
+    const history = this.getChatHistory(sessionId);
     const targetMsg = history.find(m => m.id === messageId || (m.questions && m.questions.some(q => q.id === questionId)));
     if (!targetMsg || !targetMsg.questions) {
       throw new Error(`Question ${questionId} not found in session ${sessionId}`);
@@ -751,7 +793,7 @@ Please implement the solution for this task directly in this workspace. Create a
     };
 
     history.push(ackMsg);
-    this.chatHistories.set(sessionId, history);
+    this.setChatHistory(sessionId, history);
     this.emit('goal:task_progress', { sessionId, message: ackMsg });
 
     return { question, replyMessage: ackMsg };

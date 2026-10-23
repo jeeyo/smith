@@ -27,7 +27,9 @@ const defaultGitPath = process.platform === 'win32'
   ? 'C:\\Program Files\\Git\\cmd\\git.exe'
   : 'git';
 
-const storageDir = path.join(homeDir, '.smith');
+const storageDir = (process.env.VITEST || process.env.NODE_ENV === 'test')
+  ? path.join(os.tmpdir(), 'smith-test-storage')
+  : path.join(homeDir, '.smith');
 if (!fs.existsSync(storageDir)) {
   fs.mkdirSync(storageDir, { recursive: true });
 }
