@@ -29,17 +29,17 @@ Smith ADE is a high-performance, API-first **Cooperative Agentic Development Env
 
 ### Option A: Installing on macOS via Homebrew (Desktop App)
 
-Install Smith ADE directly onto macOS via Homebrew Cask:
+Install Smith ADE directly onto macOS via Homebrew Cask from this repository:
 
 ```bash
-brew install --cask jeeyo/tap/smith
+brew tap jeeyo/smith https://github.com/jeeyo/smith
+brew install --cask smith
 ```
 
-Or tap the repository first:
+Or install directly in one command:
 
 ```bash
-brew tap jeeyo/tap
-brew install --cask smith
+brew install --cask https://raw.githubusercontent.com/jeeyo/smith/main/Casks/smith.rb
 ```
 
 This installs `Smith ADE.app` into `/Applications` and creates a `smith` CLI alias in your terminal.
