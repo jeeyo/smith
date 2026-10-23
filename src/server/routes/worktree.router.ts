@@ -7,7 +7,7 @@ import { ArtifactType, MessageArtifact } from '../../shared/types.ts';
 
 export const worktreeRouter = Router();
 
-const MIME_MAP: Record<string, string> = {
+export const MIME_MAP: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
@@ -29,7 +29,9 @@ const MIME_MAP: Record<string, string> = {
 };
 
 export function classifyArtifactType(extOrPath: string): ArtifactType {
-  const ext = path.extname(extOrPath).toLowerCase();
+  const ext = extOrPath.startsWith('.') && extOrPath.lastIndexOf('.') === 0
+    ? extOrPath.toLowerCase()
+    : path.extname(extOrPath).toLowerCase();
   if (['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].includes(ext)) return 'image';
   if (['.mmd', '.mermaid'].includes(ext)) return 'mermaid';
   if (['.html', '.htm'].includes(ext)) return 'html';

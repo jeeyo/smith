@@ -278,11 +278,11 @@ export const ArtifactPreview: React.FC<ArtifactPreviewProps> = ({ artifacts }) =
   );
 };
 
-interface MermaidRendererProps {
+export interface MermaidRendererProps {
   content: string;
 }
 
-const MermaidRenderer: React.FC<MermaidRendererProps> = ({ content }) => {
+export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ content }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState<string>('');
   const [renderError, setRenderError] = useState<string | null>(null);

@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -85,25 +86,9 @@ describe('Goal Orchestrator & Single Chat Interface Tests', () => {
     expect(msg.cost.usd).toBeGreaterThan(0);
     expect(msg.cost.tokens).toBeGreaterThan(0);
 
-    // Verify rich previews & artifacts attached (Mermaid, HTML page, Image, and Downloadable files)
+    // Verify artifacts attached without injecting synthetic demo files into user workspace
     expect(msg.artifacts).toBeDefined();
-    expect(msg.artifacts.length).toBeGreaterThanOrEqual(4);
-
-    const mermaidArt = msg.artifacts.find((a: any) => a.type === 'mermaid');
-    expect(mermaidArt).toBeDefined();
-    expect(mermaidArt.content).toContain('sequenceDiagram');
-
-    const htmlArt = msg.artifacts.find((a: any) => a.type === 'html');
-    expect(htmlArt).toBeDefined();
-    expect(htmlArt.content).toContain('<!DOCTYPE html>');
-
-    const imgArt = msg.artifacts.find((a: any) => a.type === 'image');
-    expect(imgArt).toBeDefined();
-    expect(imgArt.name).toContain('.svg');
-
-    const otherArt = msg.artifacts.find((a: any) => a.type === 'other');
-    expect(otherArt).toBeDefined();
-    expect(otherArt.url).toBeDefined();
+    expect(Array.isArray(msg.artifacts)).toBe(true);
 
     // Verify Observer safety audits attached
     expect(msg.observerAudits).toBeDefined();
@@ -240,5 +225,34 @@ describe('Goal Orchestrator & Single Chat Interface Tests', () => {
     const created = customSessionRes.body;
     expect(created.customizations.orchestrator.agentId).toBe('claude');
     expect(created.customizations.orchestrator.model).toBe('claude-3-7-sonnet');
+  });
+
+  it('collectWorktreeArtifacts scans legitimate agent artifacts from worktree without injecting synthetic files', async () => {
+    const sessionRes = await request(app).get(`/api/v1/sessions/${sessionId}`);
+    const session = sessionRes.body;
+    expect(session).toBeDefined();
+
+    const artifactsDir = path.join(session.worktree.path, 'artifacts');
+    fs.mkdirSync(artifactsDir, { recursive: true });
+
+    // Agent writes legitimate artifacts
+    fs.writeFileSync(path.join(artifactsDir, 'workflow.mmd'), 'graph TD\nA-->B', 'utf-8');
+    fs.writeFileSync(path.join(artifactsDir, 'preview.html'), '<h1>Hello</h1>', 'utf-8');
+
+    const artifacts = goalOrchestrator.collectWorktreeArtifacts(session);
+    expect(artifacts.length).toBe(2);
+
+    const mermaid = artifacts.find(a => a.name === 'workflow.mmd');
+    expect(mermaid).toBeDefined();
+    expect(mermaid?.type).toBe('mermaid');
+    expect(mermaid?.content).toBe('graph TD\nA-->B');
+
+    const html = artifacts.find(a => a.name === 'preview.html');
+    expect(html).toBeDefined();
+    expect(html?.type).toBe('html');
+    expect(html?.content).toBe('<h1>Hello</h1>');
+
+    // Clean up
+    fs.rmSync(artifactsDir, { recursive: true, force: true });
   });
 });

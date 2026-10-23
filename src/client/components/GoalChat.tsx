@@ -26,54 +26,7 @@ import {
 } from 'lucide-react';
 import { GoalChatMessage, Session, DiscoveredModel, SessionCostSummary, WorktreeDiffSummary, MessageArtifact, InteractiveQuestion } from '../../shared/types.ts';
 import { ArtifactPreview } from './ArtifactPreview.tsx';
-
-function getMessageArtifacts(msg: GoalChatMessage): MessageArtifact[] {
-  const artifacts: MessageArtifact[] = [...(msg.artifacts || [])];
-
-  if (artifacts.length === 0 && msg.content) {
-    const mermaidRegex = /```mermaid\s*([\s\S]*?)```/g;
-    let match;
-    let mIdx = 1;
-    while ((match = mermaidRegex.exec(msg.content)) !== null) {
-      artifacts.push({
-        id: `extracted-mermaid-${msg.id}-${mIdx}`,
-        name: `architecture_flow.mmd`,
-        type: 'mermaid',
-        content: match[1].trim(),
-        description: 'Agent-generated Mermaid architecture diagram'
-      });
-      mIdx++;
-    }
-
-    const htmlRegex = /```html\s*([\s\S]*?)```/g;
-    let hIdx = 1;
-    while ((match = htmlRegex.exec(msg.content)) !== null) {
-      artifacts.push({
-        id: `extracted-html-${msg.id}-${hIdx}`,
-        name: `prototype_preview.html`,
-        type: 'html',
-        content: match[1].trim(),
-        description: 'Agent-generated interactive web prototype'
-      });
-      hIdx++;
-    }
-
-    const imgRegex = /!\[(.*?)\]\((.*?)\)/g;
-    let iIdx = 1;
-    while ((match = imgRegex.exec(msg.content)) !== null) {
-      artifacts.push({
-        id: `extracted-img-${msg.id}-${iIdx}`,
-        name: match[1] || `image_${iIdx}.png`,
-        type: 'image',
-        url: match[2],
-        description: 'Agent-generated visual diagram / image'
-      });
-      iIdx++;
-    }
-  }
-
-  return artifacts;
-}
+import { MarkdownContent } from './MarkdownContent.tsx';
 
 interface GoalChatProps {
   currentSession: Session | null;
@@ -346,7 +299,7 @@ export const GoalChat: React.FC<GoalChatProps> = ({
                       : 'bg-zinc-900 border border-zinc-800 text-zinc-200 p-5 w-full shadow-sm'
                   }`}
                 >
-                  <div className="whitespace-pre-wrap">{msg.content}</div>
+                  <MarkdownContent content={msg.content} />
 
                   {/* Interactive Questions Asked by Orchestrator or Collaborating Agents */}
                   {msg.questions && msg.questions.length > 0 && (
@@ -565,9 +518,9 @@ export const GoalChat: React.FC<GoalChatProps> = ({
                     </div>
                   )}
 
-                  {/* Agent Artifacts & Rich Previews (Mermaid, HTML Pages, Images, and Download Buttons) */}
-                  {getMessageArtifacts(msg).length > 0 && (
-                    <ArtifactPreview artifacts={getMessageArtifacts(msg)} />
+                  {/* Real Session Artifacts (files on disk generated in worktree) */}
+                  {msg.artifacts && msg.artifacts.length > 0 && (
+                    <ArtifactPreview artifacts={msg.artifacts} />
                   )}
 
                   {/* The Observer Independent Verification & Safety Harness */}
