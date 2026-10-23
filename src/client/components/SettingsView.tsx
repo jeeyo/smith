@@ -298,7 +298,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, onSaved }) 
                   <span>Agent Executable & Harness Paths</span>
                 </h2>
                 <p className="text-xs text-zinc-400 mt-1">
-                  Specify exact paths to your agent CLIs and harnesses. Smith ADE launches these executables for ACP workers and background coordination.
+                  Specify exact paths to your agent CLIs and harnesses. Smith launches these executables for ACP workers and background coordination.
                 </p>
               </div>
 

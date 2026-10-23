@@ -58,7 +58,6 @@ export const TopBar: React.FC<TopBarProps> = ({
           </div>
           <div className="flex items-center gap-1">
             <span className="font-semibold text-sm tracking-tight text-zinc-100">Smith</span>
-            <span className="text-[10px] font-mono uppercase px-1 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800">ADE</span>
           </div>
         </div>
 

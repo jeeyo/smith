@@ -78,9 +78,9 @@ if (fs.existsSync(distPath)) {
   app.get('/', (req, res) => {
     res.send(`
       <html>
-        <head><title>Smith ADE Server</title></head>
+        <head><title>Smith Server</title></head>
         <body style="font-family: sans-serif; background: #0f172a; color: #f8fafc; padding: 2rem;">
-          <h1>Smith - Agentic Development Environment</h1>
+          <h1>Smith</h1>
           <p>Smith Orchestrator Server is active on port ${config.port}.</p>
           <ul>
             <li><a style="color: #38bdf8;" href="/api/docs">Interactive API Documentation (Swagger)</a></li>
@@ -176,7 +176,7 @@ ptyManager.on('pty:data', ({ ptyId, data }) => {
 
 if (!process.env.VITEST) {
   const shutdown = async () => {
-    console.log('Shutting down Smith ADE and Hindsight daemon...');
+    console.log('Shutting down Smith and Hindsight daemon...');
     await hindsightService.stopDaemon();
     process.exit(0);
   };
@@ -184,7 +184,7 @@ if (!process.env.VITEST) {
   process.on('SIGTERM', shutdown);
 
   server.listen(config.port, config.host, async () => {
-    console.log(`🚀 Smith ADE Orchestrator Server listening on http://localhost:${config.port}`);
+    console.log(`🚀 Smith Orchestrator Server listening on http://localhost:${config.port}`);
     console.log(`📖 API Documentation available at http://localhost:${config.port}/api/docs`);
 
     // Seed default session if needed

@@ -58,7 +58,7 @@ export const AgentPane: React.FC<AgentPaneProps> = ({
       term.open(terminalRef.current);
       fit.fit();
 
-      term.writeln(`\x1b[1;36m=== Smith ADE Terminal: ${agentId} (${currentModel}) ===\x1b[0m`);
+      term.writeln(`\x1b[1;36m=== Smith Terminal: ${agentId} (${currentModel}) ===\x1b[0m`);
       term.writeln(`\x1b[90mSession: ${sessionId}\x1b[0m\r\n`);
 
       xtermInstance.current = term;

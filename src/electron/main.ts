@@ -83,7 +83,7 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 700,
     backgroundColor: '#09090b',
-    title: 'Smith - Agentic Development Environment',
+    title: 'Smith',
     icon: fs.existsSync(iconPath) ? iconPath : undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -146,7 +146,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', async () => {
-  console.log('[Electron] Shutting down Smith ADE...');
+  console.log('[Electron] Shutting down Smith...');
   try {
     const { hindsightService } = require('../server/hindsight-service.ts');
     if (hindsightService) {

@@ -188,6 +188,50 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleDeleteMultipleSessions = async (sessionIds: string[]) => {
+    if (!sessionIds || sessionIds.length === 0) return;
+    try {
+      const res = await fetch('/api/v1/sessions/batch-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionIds })
+      });
+
+      if (res.ok) {
+        setSessions(prev => {
+          const updated = prev.filter(s => !sessionIds.includes(s.id));
+          if (currentSession && sessionIds.includes(currentSession.id)) {
+            if (updated.length > 0) {
+              selectSession(updated[0]);
+            } else {
+              setCurrentSession(null);
+              setChatMessages([]);
+              setCostSummary(undefined);
+            }
+          }
+          return updated;
+        });
+      } else {
+        await Promise.all(sessionIds.map(id => fetch(`/api/v1/sessions/${id}`, { method: 'DELETE' })));
+        setSessions(prev => {
+          const updated = prev.filter(s => !sessionIds.includes(s.id));
+          if (currentSession && sessionIds.includes(currentSession.id)) {
+            if (updated.length > 0) {
+              selectSession(updated[0]);
+            } else {
+              setCurrentSession(null);
+              setChatMessages([]);
+              setCostSummary(undefined);
+            }
+          }
+          return updated;
+        });
+      }
+    } catch (err) {
+      console.error('Failed to delete multiple sessions', err);
+    }
+  };
+
   const handleSendGoal = async (goal: string) => {
     if (!currentSession) {
       // Auto-create a session if none exists
@@ -352,6 +396,7 @@ export const App: React.FC = () => {
         onOpenSettings={() => setIsSettingsOpen(true)}
         isSettingsOpen={isSettingsOpen}
         onDeleteSession={handleDeleteSession}
+        onDeleteMultipleSessions={handleDeleteMultipleSessions}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
         agentHealth={agentHealth}

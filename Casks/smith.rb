@@ -5,9 +5,9 @@ cask "smith" do
   sha256 arm:   "d82b0775a04e66a22a7967bf77a68e162dc67efa9a1aa5d4f4bb7f24b25a2a33",
          intel: "d82b0775a04e66a22a7967bf77a68e162dc67efa9a1aa5d4f4bb7f24b25a2a33"
 
-  url "https://github.com/jeeyo/smith/releases/download/v#{version}/Smith.ADE-#{version}-#{arch}.dmg"
-  name "Smith ADE"
-  desc "API-first Cooperative Agentic Development Environment (ADE)"
+  url "https://github.com/jeeyo/smith/releases/download/v#{version}/Smith-#{version}-#{arch}.dmg"
+  name "Smith"
+  desc "Smith"
   homepage "https://github.com/jeeyo/smith"
 
   livecheck do
@@ -18,12 +18,12 @@ cask "smith" do
   auto_updates true
   depends_on macos: ">= :catalina"
 
-  app "Smith ADE.app"
-  binary "#{appdir}/Smith ADE.app/Contents/MacOS/Smith ADE", target: "smith"
+  app "Smith.app"
+  binary "#{appdir}/Smith.app/Contents/MacOS/Smith", target: "smith"
 
   zap trash: [
     "~/.smith",
-    "~/Library/Application Support/Smith ADE",
+    "~/Library/Application Support/Smith",
     "~/Library/Application Support/smith",
     "~/Library/Preferences/com.jeeyo.smith.plist",
     "~/Library/Saved Application State/com.jeeyo.smith.savedState",

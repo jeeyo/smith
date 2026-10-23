@@ -211,3 +211,37 @@ sessionsRouter.delete('/sessions/:id', async (req, res) => {
 
   res.json({ status: 'terminated', sessionId: req.params.id });
 });
+
+sessionsRouter.post('/sessions/batch-delete', async (req, res) => {
+  const { sessionIds } = req.body;
+  if (!Array.isArray(sessionIds)) {
+    return res.status(400).json({ error: 'sessionIds array required' });
+  }
+
+  const deleted: string[] = [];
+  for (const id of sessionIds) {
+    const session = sessionsMap.get(id);
+    if (session) {
+      for (const agentId of Object.keys(session.agents)) {
+        try {
+          acpHostEngine.terminateAgent(session.id, agentId);
+        } catch {}
+      }
+
+      try {
+        await worktreeManager.removeWorktree(session.repoPath, session.worktree.path);
+      } catch {}
+
+      sessionsMap.delete(id);
+      const filePath = path.join(sessionsStorageDir, `${session.id}.json`);
+      if (fs.existsSync(filePath)) {
+        try {
+          fs.unlinkSync(filePath);
+        } catch {}
+      }
+      deleted.push(id);
+    }
+  }
+
+  res.json({ status: 'batch_deleted', count: deleted.length, deleted });
+});

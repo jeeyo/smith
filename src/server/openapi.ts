@@ -1,9 +1,9 @@
 export const openApiSpec = {
   openapi: '3.0.3',
   info: {
-    title: 'Smith ADE API',
+    title: 'Smith API',
     version: '1.0.0',
-    description: 'API-first Cooperative Agentic Development Environment orchestrating Claude, Codex, OpenCode, and Antigravity with Vectorize Hindsight and arXiv:2610.22319 cooperative protocols.'
+    description: 'Smith API'
   },
   servers: [
     { url: '/api/v1', description: 'Smith Orchestrator API v1' }

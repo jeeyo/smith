@@ -1,7 +1,7 @@
 {
   "name": "smith",
   "version": "0.1.1",
-  "description": "Smith - API-first Cooperative Agentic Development Environment (ADE)",
+  "description": "Smith",
   "type": "module",
   "main": "dist-electron/main.cjs",
   "author": "jeeyo <jeeyo@outlook.com>",
@@ -27,7 +27,7 @@
   },
   "build": {
     "appId": "com.jeeyo.smith",
-    "productName": "Smith ADE",
+    "productName": "Smith",
     "directories": {
       "output": "release"
     },

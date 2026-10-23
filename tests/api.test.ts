@@ -267,4 +267,34 @@ describe('Smith HTTP REST API Integration Tests', () => {
     const localModels = models.filter((m: any) => /deepseek|qwen|ollama/i.test(m.id) || /deepseek|qwen|ollama/i.test(m.name));
     expect(localModels.length).toBe(0);
   });
+
+  it('POST /api/v1/sessions/batch-delete deletes multiple sessions at once', async () => {
+    const s1Res = await request(app)
+      .post('/api/v1/sessions')
+      .send({ name: 'Batch Delete Test 1', repoPath: testRepoPath });
+    const s2Res = await request(app)
+      .post('/api/v1/sessions')
+      .send({ name: 'Batch Delete Test 2', repoPath: testRepoPath });
+
+    expect(s1Res.status).toBe(201);
+    expect(s2Res.status).toBe(201);
+
+    const s1Id = s1Res.body.id;
+    const s2Id = s2Res.body.id;
+
+    const delRes = await request(app)
+      .post('/api/v1/sessions/batch-delete')
+      .send({ sessionIds: [s1Id, s2Id] });
+
+    expect(delRes.status).toBe(200);
+    expect(delRes.body.status).toBe('batch_deleted');
+    expect(delRes.body.count).toBe(2);
+    expect(delRes.body.deleted).toContain(s1Id);
+    expect(delRes.body.deleted).toContain(s2Id);
+
+    const check1 = await request(app).get('/api/v1/sessions/' + s1Id);
+    const check2 = await request(app).get('/api/v1/sessions/' + s2Id);
+    expect(check1.status).toBe(404);
+    expect(check2.status).toBe(404);
+  });
 });
