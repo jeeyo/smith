@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { exec } from 'node:child_process';
+import { exec, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { AgentAdapter, AdapterExecutionResult } from './types.ts';
 import { AgentHealthStatus, AgentId, TokenUsage } from '../../shared/types.ts';
@@ -14,12 +14,8 @@ export class OpencodeAdapter implements AgentAdapter {
 
   getBinaryPath(): string {
     if (config.agentBinaries?.opencode) {
-      if (path.isAbsolute(config.agentBinaries.opencode) && fs.existsSync(config.agentBinaries.opencode)) {
-        return config.agentBinaries.opencode;
-      }
-      if (!path.isAbsolute(config.agentBinaries.opencode)) {
-        return config.agentBinaries.opencode;
-      }
+      const custom = config.agentBinaries.opencode.trim().replace(/^["']|["']$/g, '');
+      if (custom) return custom;
     }
     return 'opencode';
   }
@@ -42,7 +38,7 @@ export class OpencodeAdapter implements AgentAdapter {
         binaryPath: bin,
         authenticated: false,
         status: 'not_installed',
-        message: 'OpenCode binary not found. Configure path in App Settings.',
+        message: `OpenCode binary not found at ${bin}. Configure path in App Settings.`,
         remediation: 'Specify the binary path in App Settings or install OpenCode CLI.',
         lastCheckedAt: Date.now()
       };
@@ -81,24 +77,80 @@ export class OpencodeAdapter implements AgentAdapter {
     cwd: string,
     options?: { timeoutMs?: number; model?: string; taskId?: string }
   ): Promise<AdapterExecutionResult> {
-    const model = options?.model || 'qwen-2.5-coder-32b';
-    const output = `[OpenCode @ ${model}] Executed successfully in ${cwd}.`;
-    const tokenUsage: TokenUsage = {
-      inputTokens: Math.max(100, prompt.length * 2),
-      outputTokens: Math.max(50, output.length * 2),
-      cachedTokens: 0,
-      reasoningTokens: 0,
-      totalTokens: Math.max(150, prompt.length * 2 + output.length * 2)
-    };
+    const bin = this.getBinaryPath();
+    const installed = this.isInstalled();
 
-    return {
-      isError: false,
-      stdout: output,
-      stderr: '',
-      exitCode: 0,
-      tokens: tokenUsage,
-      costUsd: 0.001
-    };
+    if (!installed) {
+      return {
+        stdout: '',
+        stderr: `OpenCode binary not found at ${bin}. Please configure path in App Settings.`,
+        exitCode: 1,
+        isError: true,
+        errorMessage: `OpenCode binary not found at ${bin}.`,
+        remediation: 'Specify the binary path in App Settings or install OpenCode CLI.'
+      };
+    }
+
+    const timeout = options?.timeoutMs || 120000;
+
+    return new Promise<AdapterExecutionResult>((resolve) => {
+      const args = ['run', prompt];
+      if (options?.model) {
+        args.push('--model', options.model);
+      }
+
+      const proc = spawn(bin, args, {
+        cwd,
+        shell: true,
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      proc.stdout?.on('data', d => stdout += d.toString());
+      proc.stderr?.on('data', d => stderr += d.toString());
+
+      const timer = setTimeout(() => {
+        try { proc.kill(); } catch {}
+        resolve({
+          stdout,
+          stderr: stderr + '\nExecution timed out after ' + (timeout / 1000) + 's',
+          exitCode: 124,
+          isError: true,
+          errorMessage: 'OpenCode execution timed out'
+        });
+      }, timeout);
+
+      proc.on('close', (code) => {
+        clearTimeout(timer);
+        resolve({
+          stdout,
+          stderr,
+          exitCode: code ?? 0,
+          isError: code !== 0 && !stdout,
+          errorMessage: code !== 0 ? stderr || `OpenCode exited with code ${code}` : undefined,
+          tokens: {
+            inputTokens: Math.max(100, prompt.length * 2),
+            outputTokens: Math.max(50, stdout.length * 2),
+            cachedTokens: 0,
+            reasoningTokens: 0,
+            totalTokens: Math.max(150, prompt.length * 2 + stdout.length * 2)
+          }
+        });
+      });
+
+      proc.on('error', (err) => {
+        clearTimeout(timer);
+        resolve({
+          stdout,
+          stderr: err.message,
+          exitCode: 1,
+          isError: true,
+          errorMessage: err.message
+        });
+      });
+    });
   }
 }
 

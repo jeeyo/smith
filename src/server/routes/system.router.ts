@@ -34,6 +34,7 @@ systemRouter.get('/health', async (req, res) => {
     timestamp: Date.now(),
     hindsight: hindsightHealth,
     agents,
+    agentBinaries: config.agentBinaries,
     git: {
       path: config.gitPath
     }

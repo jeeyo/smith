@@ -1,12 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { exec, spawn } from 'node:child_process';
-import { promisify } from 'node:util';
+import { spawn } from 'node:child_process';
 import { AgentAdapter, AdapterExecutionResult } from './types.ts';
 import { AgentHealthStatus, AgentId, TokenUsage } from '../../shared/types.ts';
 import { config } from '../config.ts';
-
-const execAsync = promisify(exec);
 
 export class ClaudeAdapter implements AgentAdapter {
   readonly agentId: AgentId = 'claude';
@@ -14,12 +11,8 @@ export class ClaudeAdapter implements AgentAdapter {
 
   getBinaryPath(): string {
     if (config.agentBinaries?.claude) {
-      if (path.isAbsolute(config.agentBinaries.claude) && fs.existsSync(config.agentBinaries.claude)) {
-        return config.agentBinaries.claude;
-      }
-      if (!path.isAbsolute(config.agentBinaries.claude)) {
-        return config.agentBinaries.claude;
-      }
+      const custom = config.agentBinaries.claude.trim().replace(/^["']|["']$/g, '');
+      if (custom) return custom;
     }
     const localAppData = process.env.LOCALAPPDATA || '';
     const claudeDir = path.join(localAppData, 'Claude-Data');
@@ -74,27 +67,50 @@ export class ClaudeAdapter implements AgentAdapter {
         installed: false,
         authenticated: false,
         status: 'not_installed',
-        message: 'Claude Code binary not found in system or AppData.',
-        remediation: 'Install Claude Code via npm i -g @anthropic-ai/claude-code',
+        message: `Claude Code binary not found at ${bin}.`,
+        remediation: 'Configure the Claude Code binary path in App Settings or run "npm i -g @anthropic-ai/claude-code".',
         lastCheckedAt: Date.now()
       };
     }
 
     try {
-      // Execute non-interactive check with stdin closed to prevent prompt lock
-      const { stdout, stderr } = await execAsync(`"${bin}" -p "healthcheck"`, {
-        shell: 'powershell.exe',
-        timeout: 6000
+      const res = await new Promise<{ stdout: string; stderr: string; code: number | null }>((resolve) => {
+        const proc = spawn(bin, ['-p', 'healthcheck'], {
+          shell: true,
+          stdio: ['ignore', 'pipe', 'pipe']
+        });
+        let stdout = '';
+        let stderr = '';
+        proc.stdout?.on('data', d => stdout += d.toString());
+        proc.stderr?.on('data', d => stderr += d.toString());
+        const timer = setTimeout(() => {
+          try { proc.kill(); } catch {}
+          resolve({ stdout, stderr, code: 124 });
+        }, 6000);
+        proc.on('close', (code) => {
+          clearTimeout(timer);
+          resolve({ stdout, stderr, code });
+        });
+        proc.on('error', (err) => {
+          clearTimeout(timer);
+          resolve({ stdout, stderr: err.message, code: 1 });
+        });
       });
-      const combined = stdout + stderr;
 
-      if (combined.includes('Not logged in') || combined.includes('/login') || combined.includes('claude login')) {
+      const combined = res.stdout + res.stderr;
+      const notLoggedIn = combined.includes('Not logged in') ||
+        combined.includes('/login') ||
+        combined.includes('claude login') ||
+        combined.includes('Failed to authenticate') ||
+        combined.includes('OAuth session expired');
+
+      if (notLoggedIn) {
         return {
           agentId: this.agentId,
           name: this.name,
           installed: true,
           binaryPath: bin,
-          version: '2.1.304',
+          version: '2.1.308',
           authenticated: false,
           status: 'not_logged_in',
           message: 'Claude Code requires subscription login.',
@@ -114,22 +130,6 @@ export class ClaudeAdapter implements AgentAdapter {
         lastCheckedAt: Date.now()
       };
     } catch (err: any) {
-      const combined = (err.stdout || '') + (err.stderr || '') + (err.message || '');
-      if (combined.includes('Not logged in') || combined.includes('/login') || combined.includes('claude login')) {
-        return {
-          agentId: this.agentId,
-          name: this.name,
-          installed: true,
-          binaryPath: bin,
-          version: '2.1.304',
-          authenticated: false,
-          status: 'not_logged_in',
-          message: 'Claude Code requires subscription login.',
-          remediation: 'Run "claude login" to link your Claude Pro or Team account.',
-          lastCheckedAt: Date.now()
-        };
-      }
-
       return {
         agentId: this.agentId,
         name: this.name,
@@ -150,12 +150,15 @@ export class ClaudeAdapter implements AgentAdapter {
     options?: { timeoutMs?: number; model?: string; taskId?: string }
   ): Promise<AdapterExecutionResult> {
     const bin = this.getBinaryPath();
-    const timeout = options?.timeoutMs || 25000;
+    const timeout = options?.timeoutMs || 120000;
 
     return new Promise<AdapterExecutionResult>((resolve) => {
-      // Pass prompt via -p flag and ignore stdin to avoid hanging
-      const safePrompt = prompt.replace(/"/g, '\\"');
-      const proc = spawn(bin, ['-p', safePrompt], {
+      const args = ['-p', prompt, '--permission-mode', 'accept-all', '--dangerously-skip-permissions'];
+      if (options?.model) {
+        args.push('--model', options.model);
+      }
+
+      const proc = spawn(bin, args, {
         cwd,
         shell: true,
         stdio: ['ignore', 'pipe', 'pipe']
@@ -171,7 +174,7 @@ export class ClaudeAdapter implements AgentAdapter {
         try { proc.kill(); } catch {}
         resolve({
           stdout,
-          stderr: stderr + '\nExecution timed out',
+          stderr: stderr + '\nExecution timed out after ' + (timeout / 1000) + 's',
           exitCode: 124,
           isError: true,
           errorMessage: 'Claude execution timed out'
@@ -181,15 +184,29 @@ export class ClaudeAdapter implements AgentAdapter {
       proc.on('close', (code) => {
         clearTimeout(timer);
         const combined = stdout + stderr;
-        const notLoggedIn = combined.includes('Not logged in') || combined.includes('claude login');
+        const notLoggedIn = combined.includes('Not logged in') ||
+          combined.includes('claude login') ||
+          combined.includes('Failed to authenticate') ||
+          combined.includes('OAuth session expired');
+
+        const isError = (code !== 0 && !stdout) || notLoggedIn;
+        let errorMessage: string | undefined;
+        let remediation: string | undefined;
+
+        if (notLoggedIn) {
+          errorMessage = 'Claude requires authentication: OAuth session expired or not logged in. Run "claude login" to authenticate.';
+          remediation = 'Run "claude login" in terminal';
+        } else if (code !== 0) {
+          errorMessage = stderr || `Process exited with code ${code}`;
+        }
 
         resolve({
           stdout,
           stderr,
           exitCode: code ?? 0,
-          isError: (code !== 0 && !stdout) || notLoggedIn,
-          errorMessage: notLoggedIn ? 'Claude requires authentication: run "claude login"' : (code !== 0 ? stderr : undefined),
-          remediation: notLoggedIn ? 'Run "claude login" in terminal' : undefined,
+          isError,
+          errorMessage,
+          remediation,
           tokens: {
             inputTokens: Math.max(100, prompt.length * 3),
             outputTokens: Math.max(50, stdout.length * 2),
@@ -207,7 +224,8 @@ export class ClaudeAdapter implements AgentAdapter {
           stderr: err.message,
           exitCode: 1,
           isError: true,
-          errorMessage: err.message
+          errorMessage: err.message,
+          remediation: 'Verify Claude Code binary path in App Settings'
         });
       });
     });

@@ -25,6 +25,7 @@ export const App: React.FC = () => {
   const [costSummary, setCostSummary] = useState<SessionCostSummary | undefined>();
   const [hindsightConnected, setHindsightConnected] = useState<boolean>(false);
   const [agentHealth, setAgentHealth] = useState<Record<string, AgentHealthStatus>>({});
+  const [agentBinaries, setAgentBinaries] = useState<Record<string, string>>({});
   const [chatMessages, setChatMessages] = useState<GoalChatMessage[]>([]);
   const [isOrchestrating, setIsOrchestrating] = useState<boolean>(false);
 
@@ -97,6 +98,7 @@ export const App: React.FC = () => {
       const data = await res.json();
       setHindsightConnected(data.hindsight?.connected || false);
       if (data.agents) setAgentHealth(data.agents);
+      if (data.agentBinaries) setAgentBinaries(data.agentBinaries);
     } catch {
       setHindsightConnected(false);
     }
@@ -289,7 +291,12 @@ export const App: React.FC = () => {
   };
 
   const handleOpenTerminal = (cmd: string = 'claude login') => {
-    setTerminalInitialCmd(cmd);
+    let resolvedCmd = cmd;
+    if (resolvedCmd === 'claude login') {
+      const claudeBin = agentBinaries.claude;
+      resolvedCmd = claudeBin ? `& "${claudeBin}" login` : 'claude login';
+    }
+    setTerminalInitialCmd(resolvedCmd);
     setIsTerminalOpen(true);
   };
 

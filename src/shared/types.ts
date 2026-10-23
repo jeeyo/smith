@@ -66,7 +66,7 @@ export interface SessionCostSummary {
   }>;
 }
 
-export type TaskStatus = 'unassigned' | 'claimed' | 'in_progress' | 'completed' | 'blocked';
+export type TaskStatus = 'unassigned' | 'claimed' | 'in_progress' | 'completed' | 'blocked' | 'error';
 
 export interface Task {
   id: string;

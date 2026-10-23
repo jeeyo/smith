@@ -4,6 +4,7 @@ import { exec, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { AgentAdapter, AdapterExecutionResult } from './types.ts';
 import { AgentHealthStatus, AgentId, TokenUsage } from '../../shared/types.ts';
+import { config } from '../config.ts';
 
 const execAsync = promisify(exec);
 
@@ -12,6 +13,10 @@ export class CodexAdapter implements AgentAdapter {
   readonly name = 'OpenAI Codex';
 
   getBinaryPath(): string {
+    if (config.agentBinaries?.codex) {
+      const custom = config.agentBinaries.codex.trim().replace(/^["']|["']$/g, '');
+      if (custom) return custom;
+    }
     const localAppData = process.env.LOCALAPPDATA || '';
     const codexDir = path.join(localAppData, 'OpenAI', 'Codex');
     if (fs.existsSync(codexDir)) {
@@ -61,14 +66,13 @@ export class CodexAdapter implements AgentAdapter {
         installed: false,
         authenticated: false,
         status: 'not_installed',
-        message: 'Codex binary not found in system or AppData.',
-        remediation: 'Install Codex CLI or OpenAI Codex App.',
+        message: `Codex binary not found at ${bin}.`,
+        remediation: 'Configure the Codex binary path in App Settings or install Codex CLI.',
         lastCheckedAt: Date.now()
       };
     }
 
     try {
-      // Must pipe $null into stdin on Windows to prevent blocking
       const { stdout, stderr } = await execAsync(`$null | "${bin}" exec "ping" --skip-git-repo-check`, {
         shell: 'powershell.exe',
         timeout: 6000
@@ -146,14 +150,26 @@ export class CodexAdapter implements AgentAdapter {
     options?: { timeoutMs?: number; model?: string; taskId?: string }
   ): Promise<AdapterExecutionResult> {
     const bin = this.getBinaryPath();
-    const timeout = options?.timeoutMs || 25000;
+    const installed = this.isInstalled();
+
+    if (!installed) {
+      return {
+        stdout: '',
+        stderr: `Codex binary not found at ${bin}. Please configure path in App Settings.`,
+        exitCode: 1,
+        isError: true,
+        errorMessage: `Codex binary not found at ${bin}.`,
+        remediation: 'Configure the Codex binary path in App Settings.'
+      };
+    }
+
+    const timeout = options?.timeoutMs || 120000;
 
     return new Promise<AdapterExecutionResult>((resolve) => {
       const safePrompt = prompt.replace(/"/g, '`"');
-      // Execute via powershell with null pipe so Codex receives EOF on stdin immediately
       const cmd = `$null | "${bin}" exec "${safePrompt}" --skip-git-repo-check`;
 
-      const proc = exec(cmd, {
+      exec(cmd, {
         cwd,
         shell: 'powershell.exe',
         timeout
