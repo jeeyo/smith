@@ -45,19 +45,39 @@ goalRouter.get('/sessions/:id/chat', (req, res) => {
 
 /**
  * POST /api/v1/sessions/:id/goal
- * Orchestrates a declared goal for a specific session.
+ * Handles user input in the session chat (goals, questions, approvals, or agent mentions).
  */
 goalRouter.post('/sessions/:id/goal', async (req, res) => {
   const session = getSession(req.params.id);
   if (!session) return res.status(404).json({ error: 'Session not found' });
 
-  const { goal } = req.body;
+  const { goal, autoStart } = req.body;
   if (!goal || typeof goal !== 'string') {
     return res.status(400).json({ error: 'goal string is required' });
   }
 
   try {
-    const result = await goalOrchestrator.executeGoal(session.id, goal);
+    const result = await goalOrchestrator.handleSessionInput(session.id, goal, { autoStart });
+    res.status(200).json({
+      status: 'success',
+      sessionId: session.id,
+      message: result
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/v1/sessions/:id/goal/start
+ * Explicit endpoint to start execution of a plan awaiting approval.
+ */
+goalRouter.post('/sessions/:id/goal/start', async (req, res) => {
+  const session = getSession(req.params.id);
+  if (!session) return res.status(404).json({ error: 'Session not found' });
+
+  try {
+    const result = await goalOrchestrator.startExecution(session.id);
     res.status(200).json({
       status: 'success',
       sessionId: session.id,

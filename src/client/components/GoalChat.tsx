@@ -38,6 +38,7 @@ interface GoalChatProps {
   onOpenTerminal?: (initialCmd?: string) => void;
   onMergeWorktree?: (sessionId: string) => Promise<any>;
   onDiscardWorktree?: (sessionId: string) => Promise<any>;
+  onStartExecution?: (sessionId: string) => Promise<void>;
   onAnswerQuestion?: (messageId: string, questionId: string, selectedOptions: string[], customAnswer?: string) => Promise<void>;
 }
 
@@ -166,6 +167,7 @@ export const GoalChat: React.FC<GoalChatProps> = ({
   messages,
   isOrchestrating,
   onSendGoal,
+  onStartExecution,
   availableModels,
   costSummary,
   onOpenTerminal,
@@ -178,7 +180,82 @@ export const GoalChat: React.FC<GoalChatProps> = ({
   const [opsTabs, setOpsTabs] = useState<Record<string, 'ops' | 'memory' | 'broadcast' | 'observer'>>({});
   const [expandedDiffs, setExpandedDiffs] = useState<Record<string, boolean>>({});
   const [mergeStates, setMergeStates] = useState<Record<string, { status: 'idle' | 'merging' | 'merged' | 'discarded'; commit?: string }>>({});
+  const [showMentionPopup, setShowMentionPopup] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionStartIndex, setMentionStartIndex] = useState(-1);
+  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const mentionTargets = React.useMemo(() => {
+    const list: Array<{ id: string; name: string; role: string; model: string }> = [
+      {
+        id: 'orchestrator',
+        name: '@orchestrator',
+        role: 'Orchestrator',
+        model: currentSession?.customizations?.orchestrator?.model || 'gemini-4-argon'
+      },
+      {
+        id: 'observer',
+        name: '@observer',
+        role: 'Telemetry Auditor',
+        model: currentSession?.customizations?.observer?.model || 'gemini-4-argon'
+      }
+    ];
+
+    if (currentSession?.agents) {
+      for (const [key, agent] of Object.entries(currentSession.agents)) {
+        list.push({
+          id: key,
+          name: `@${key}`,
+          role: agent.config?.agentId || 'worker',
+          model: agent.config?.model || 'active'
+        });
+      }
+    }
+
+    return list;
+  }, [currentSession]);
+
+  const filteredMentions = React.useMemo(() => {
+    if (!mentionQuery) return mentionTargets;
+    const q = mentionQuery.toLowerCase();
+    return mentionTargets.filter(m => m.id.toLowerCase().includes(q) || m.role.toLowerCase().includes(q));
+  }, [mentionTargets, mentionQuery]);
+
+  const handleSelectMention = (item: { id: string }) => {
+    if (!textareaRef.current) return;
+    const before = inputGoal.substring(0, mentionStartIndex);
+    const after = inputGoal.substring(textareaRef.current.selectionStart || inputGoal.length);
+    const updated = `${before}@${item.id} ${after}`;
+    setInputGoal(updated);
+    setShowMentionPopup(false);
+    setTimeout(() => {
+      if (textareaRef.current) {
+        const nextPos = before.length + item.id.length + 2;
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(nextPos, nextPos);
+      }
+    }, 10);
+  };
+
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setInputGoal(val);
+
+    const cursorPos = e.target.selectionStart;
+    const textUpToCursor = val.substring(0, cursorPos);
+    const match = textUpToCursor.match(/@([a-zA-Z0-9_-]*)$/);
+
+    if (match) {
+      setShowMentionPopup(true);
+      setMentionQuery(match[1]);
+      setMentionStartIndex(cursorPos - match[0].length);
+      setSelectedMentionIndex(0);
+    } else {
+      setShowMentionPopup(false);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -261,9 +338,18 @@ export const GoalChat: React.FC<GoalChatProps> = ({
         ) : (
           messages.map((msg) => {
             const isUser = msg.sender === 'user';
+            const isAgent = msg.sender === 'agent';
             const isOpsOpen = !!expandedOps[msg.id];
             const isDiffOpen = !!expandedDiffs[msg.id];
             const mergeState = mergeStates[msg.id]?.status || 'idle';
+
+            const senderTitle = isUser
+              ? 'You'
+              : isAgent
+              ? msg.agentId === 'observer'
+                ? `Observer (@observer · Telemetry Auditor)`
+                : `Worker Agent (@${msg.agentId})`
+              : `Smith Orchestrator (@${msg.orchestratorAgentId || currentSession?.customizations?.orchestrator?.agentId || 'antigravity'} · ${msg.orchestratorModel || currentSession?.customizations?.orchestrator?.model || 'gemini-2.5-pro'})`;
 
             return (
               <div
@@ -273,9 +359,7 @@ export const GoalChat: React.FC<GoalChatProps> = ({
                 {/* Sender Label */}
                 <div className="flex items-center gap-2 px-1 text-xs text-zinc-400">
                   <span className="font-medium text-zinc-300">
-                    {isUser
-                      ? 'You'
-                      : `Smith Orchestrator (@${msg.orchestratorAgentId || currentSession?.customizations?.orchestrator?.agentId || 'antigravity'} · ${msg.orchestratorModel || currentSession?.customizations?.orchestrator?.model || 'gemini-2.5-pro'})`}
+                    {senderTitle}
                   </span>
                   <span className="text-[11px] text-zinc-500">
                     {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -284,9 +368,10 @@ export const GoalChat: React.FC<GoalChatProps> = ({
                     <span className={`text-[10px] px-1.5 py-0.5 rounded border uppercase tracking-wider font-mono ${
                       msg.status === 'completed' ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/60' :
                       msg.status === 'executing' ? 'bg-amber-950/40 text-amber-400 border-amber-800/60' :
+                      msg.status === 'awaiting_approval' ? 'bg-sky-950/40 text-sky-400 border-sky-800/60' :
                       'bg-zinc-800 text-zinc-400 border-zinc-700'
                     }`}>
-                      {msg.status}
+                      {msg.status === 'awaiting_approval' ? 'Awaiting Approval' : msg.status}
                     </span>
                   )}
                 </div>
@@ -296,10 +381,36 @@ export const GoalChat: React.FC<GoalChatProps> = ({
                   className={`rounded-xl text-sm leading-relaxed ${
                     isUser
                       ? 'bg-zinc-800 border border-zinc-700 text-zinc-100 px-4 py-3 max-w-2xl'
+                      : isAgent
+                      ? msg.agentId === 'observer'
+                        ? 'bg-zinc-900 border border-sky-800/70 text-zinc-200 p-5 w-full shadow-sm'
+                        : 'bg-zinc-900 border border-emerald-800/70 text-zinc-200 p-5 w-full shadow-sm'
                       : 'bg-zinc-900 border border-zinc-800 text-zinc-200 p-5 w-full shadow-sm'
                   }`}
                 >
                   <MarkdownContent content={msg.content} />
+
+                  {/* Awaiting Approval Action Card */}
+                  {msg.status === 'awaiting_approval' && onStartExecution && currentSession && (
+                    <div className="mt-4 p-3.5 rounded-lg bg-emerald-950/30 border border-emerald-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-semibold text-emerald-300 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                          <span>Plan Formulated (Elephant Protocol) — Awaiting Approval</span>
+                        </div>
+                        <p className="text-[11px] text-zinc-400 mt-0.5">
+                          Review the plan and answer any questions above. Click Start or type "start" to dispatch tasks to session workers.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => onStartExecution(currentSession.id)}
+                        disabled={isOrchestrating}
+                        className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-zinc-950 font-semibold text-xs transition-colors shadow-sm flex-shrink-0"
+                      >
+                        <span>▶ Start Execution</span>
+                      </button>
+                    </div>
+                  )}
 
                   {/* Interactive Questions Asked by Orchestrator or Collaborating Agents */}
                   {msg.questions && msg.questions.length > 0 && (
@@ -752,16 +863,74 @@ export const GoalChat: React.FC<GoalChatProps> = ({
       {/* Input Form Pinned to Bottom */}
       <div className="border-t border-zinc-800 bg-zinc-950 p-4">
         <form onSubmit={handleSubmit} className="relative">
+          {/* @ Mention Autocomplete Popup Menu */}
+          {showMentionPopup && filteredMentions.length > 0 && (
+            <div className="absolute bottom-full left-0 mb-2 w-80 max-h-56 overflow-y-auto bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl py-1.5 z-50 divide-y divide-zinc-800/60">
+              <div className="px-3 py-1 text-[10px] uppercase font-semibold text-zinc-500 tracking-wider flex items-center justify-between">
+                <span>Select Agent / Worker</span>
+                <span className="text-[9px] text-zinc-600 font-normal">↑↓ navigate · Enter select</span>
+              </div>
+              <div className="py-1">
+                {filteredMentions.map((item, idx) => {
+                  const isSelected = idx === selectedMentionIndex;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleSelectMention(item)}
+                      onMouseEnter={() => setSelectedMentionIndex(idx)}
+                      className={`w-full flex items-center justify-between px-3 py-2 text-left text-xs transition-colors ${
+                        isSelected ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className={`font-mono font-medium ${item.id === 'observer' ? 'text-sky-400' : item.id === 'orchestrator' ? 'text-amber-400' : 'text-emerald-400'}`}>
+                          @{item.id}
+                        </span>
+                        <span className="text-[11px] text-zinc-400">({item.role})</span>
+                      </div>
+                      <span className="text-[10px] font-mono text-zinc-500 truncate max-w-[100px]">{item.model}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <textarea
+            ref={textareaRef}
             value={inputGoal}
-            onChange={(e) => setInputGoal(e.target.value)}
+            onChange={handleTextareaChange}
             onKeyDown={(e) => {
+              if (showMentionPopup && filteredMentions.length > 0) {
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  setSelectedMentionIndex(prev => (prev + 1) % filteredMentions.length);
+                  return;
+                }
+                if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setSelectedMentionIndex(prev => (prev - 1 + filteredMentions.length) % filteredMentions.length);
+                  return;
+                }
+                if (e.key === 'Enter' || e.key === 'Tab') {
+                  e.preventDefault();
+                  handleSelectMention(filteredMentions[selectedMentionIndex]);
+                  return;
+                }
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setShowMentionPopup(false);
+                  return;
+                }
+              }
+
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 handleSubmit(e);
               }
             }}
-            placeholder="Declare your goal (e.g. 'Build an authentication service with Ed25519 tokens and integration tests')..."
+            placeholder="Declare a goal, ask a question, or type @ to mention an agent (e.g. '@observer ...', '@worker-1 ...')..."
             rows={2}
             disabled={isOrchestrating}
             className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 pr-24 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-zinc-600 resize-none transition-colors disabled:opacity-60"

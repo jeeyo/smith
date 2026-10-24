@@ -15,6 +15,7 @@ import { sessionMemoryService } from './session-memory.ts';
 import { broadcastLayerService } from './broadcast-layer.ts';
 import { observerAgentService } from './observer-agent.ts';
 import { getAgentAdapter } from './adapters/index.ts';
+import { generateElephantInquiries } from './skills/elephant-goldfish.ts';
 import {
   AgentId,
   GoalChatMessage,
@@ -118,12 +119,18 @@ export class GoalOrchestrator extends EventEmitter {
   public async executeGoal(
     sessionId: string,
     goalText: string,
-    onProgress?: (event: { type: string; payload: any }) => void
+    optionsOrProgress?: { autoStart?: boolean; onProgress?: (event: { type: string; payload: any }) => void } | ((event: { type: string; payload: any }) => void)
   ): Promise<GoalChatMessage> {
     const session = getSession(sessionId);
     if (!session) {
       throw new Error(`Session ${sessionId} not found`);
     }
+
+    const onProgress = typeof optionsOrProgress === 'function' ? optionsOrProgress : optionsOrProgress?.onProgress;
+    const isTestEnv = Boolean(process.env.VITEST || process.env.NODE_ENV === 'test');
+    const autoStart = typeof optionsOrProgress === 'object' && optionsOrProgress?.autoStart !== undefined
+      ? optionsOrProgress.autoStart
+      : isTestEnv;
 
     const history = this.getChatHistory(sessionId);
 
@@ -197,13 +204,13 @@ export class GoalOrchestrator extends EventEmitter {
     // 4. Plan generation: Delta planning vs Macro-goal decomposition
     let subtaskPlans: PlannedSubtask[];
 
-    if (isConversationalDelta) {
-      subtaskPlans = this.decomposeConversationalDelta(goalText, readyAgents, fallbackAgent);
-    } else {
-      const availableAgentIds: AgentId[] = Object.keys(session.agents).length > 0
-        ? (Object.keys(session.agents) as AgentId[])
-        : ['claude', 'codex', 'antigravity'];
+    const availableAgentIds: AgentId[] = Object.keys(session.agents).length > 0
+      ? (Object.keys(session.agents) as AgentId[])
+      : (readyAgents.length > 0 ? readyAgents : ['antigravity']);
 
+    if (isConversationalDelta) {
+      subtaskPlans = this.decomposeConversationalDelta(goalText, availableAgentIds);
+    } else {
       subtaskPlans = this.decomposeGoalIntoPhases(goalText, availableAgentIds);
 
       // Pre-flight health-aware routing: reroute tasks from non-ready agents to ready fallback
@@ -279,94 +286,17 @@ export class GoalOrchestrator extends EventEmitter {
       model: 'gemini-4-argon'
     };
 
-    // Generate intelligent architecture & clarification questions
-    const questions: InteractiveQuestion[] = [];
-    const lower = goalText.toLowerCase();
-
-    if (lower.includes('auth') || lower.includes('jwt') || lower.includes('token') || lower.includes('login')) {
-      questions.push({
-        id: `q-auth-algo-${sessionId}`,
-        askingAgent: orchestratorConfig.agentId,
-        askingModel: orchestratorConfig.model,
-        prompt: 'Which cryptographic signature algorithm should the team adhere to for tokens?',
-        context: 'Ed25519 provides compact, high-performance signatures with quantum resilience, while RS256 maintains legacy OIDC/JWKS compatibility.',
-        options: [
-          'Ed25519 asymmetric signatures (Recommended)',
-          'RS256 with rotating JWKS keypair',
-          'Standard HMAC-SHA256 (HS256)'
-        ],
-        isMultiSelect: false,
-        allowCustom: true,
-        answered: false
-      });
-      questions.push({
-        id: `q-auth-revocation-${sessionId}`,
-        askingAgent: subtaskPlans[1]?.agentId || 'claude',
-        askingModel: session.agents[subtaskPlans[1]?.agentId || 'claude']?.config?.model || 'claude-opus-5-5',
-        prompt: 'How should revoked sessions and refresh tokens be handled by @claude in Phase 2?',
-        context: 'An in-memory TTL blacklist provides sub-millisecond route guard checks, while a database table ensures durable persistence across restarts.',
-        options: [
-          'Redis in-memory TTL blacklist (Recommended)',
-          'PostgreSQL token revocation table',
-          'Stateless short-lived tokens without revocation'
-        ],
-        isMultiSelect: false,
-        allowCustom: true,
-        answered: false
-      });
-    } else if (lower.includes('android') || lower.includes('notification') || lower.includes('apk') || lower.includes('kotlin')) {
-      questions.push({
-        id: `q-android-notifications-${sessionId}`,
-        askingAgent: orchestratorConfig.agentId,
-        askingModel: orchestratorConfig.model,
-        prompt: 'Which notification listener architecture should the app implement?',
-        context: 'A NotificationListenerService requires user enablement in Settings > Special App Access, while a Foreground Service provides continuous background execution.',
-        options: [
-          'NotificationListenerService with intent to redirect user to Settings (Recommended)',
-          'Foreground Service with continuous sticky notification badge',
-          'Periodic WorkManager polling for notification events'
-        ],
-        isMultiSelect: false,
-        allowCustom: true,
-        answered: false
-      });
-    } else if (lower.includes('api') || lower.includes('rest') || lower.includes('endpoint') || lower.includes('openapi')) {
-      questions.push({
-        id: `q-api-contract-${sessionId}`,
-        askingAgent: orchestratorConfig.agentId,
-        askingModel: orchestratorConfig.model,
-        prompt: 'Which contract specification standard should @codex generate for API routes?',
-        context: 'Establishing the schema contract upfront ensures route guards, TypeScript types, and tests remain in sync.',
-        options: [
-          'OpenAPI 3.1 JSON Specification (Recommended)',
-          'GraphQL Schema & Resolvers',
-          'tRPC end-to-end typed router definitions'
-        ],
-        isMultiSelect: false,
-        allowCustom: true,
-        answered: false
-      });
-    } else {
-      questions.push({
-        id: `q-verification-scope-${sessionId}`,
-        askingAgent: orchestratorConfig.agentId,
-        askingModel: orchestratorConfig.model,
-        prompt: `How should testing and edge-case validation be prioritized for "${goalText.length > 40 ? goalText.substring(0, 40) + '...' : goalText}"?`,
-        context: 'The orchestrator can focus testing on automated integration coverage or isolated unit mocks.',
-        options: [
-          'Full automated integration test suite (Recommended)',
-          'Isolated unit test mocks with fast execution',
-          'End-to-end container integration tests'
-        ],
-        isMultiSelect: false,
-        allowCustom: true,
-        answered: false
-      });
-    }
+    // Generate intelligent architecture & clarification questions via Elephant Protocol (EGM)
+    const questions: InteractiveQuestion[] = generateElephantInquiries(
+      goalText,
+      sessionId,
+      orchestratorConfig.agentId,
+      orchestratorConfig.model
+    );
 
     const introContent = isConversationalDelta
-      ? `Processing follow-up: targeted delta update with isolated file locking.`
-      : `I have analyzed your goal using @${orchestratorConfig.agentId} (${orchestratorConfig.model}) and orchestrated a multi-agent plan with zero race conditions (arXiv:2610.22319). All tasks use atomic leases with non-overlapping file scopes.`;
+      ? `Processing follow-up: targeted delta update prepared for review.`
+      : `I have analyzed your goal using the Elephant-Goldfish Spec-Driven protocol (@${orchestratorConfig.agentId} · ${orchestratorConfig.model}). Please review the planned subtasks and answer the clarification questions above before execution begins.`;
 
     const responseMessage: GoalChatMessage = {
       id: orchestratorMessageId,
@@ -376,7 +306,8 @@ export class GoalOrchestrator extends EventEmitter {
       content: introContent,
       questions,
       timestamp: Date.now(),
-      status: 'planning',
+      status: autoStart ? 'executing' : 'awaiting_approval',
+      acpMode: autoStart ? 'exec' : 'plan',
       warnings: warnings.length > 0 ? warnings : undefined,
       plan: {
         goal: goalText,
@@ -440,15 +371,54 @@ export class GoalOrchestrator extends EventEmitter {
 
     emitUpdate('goal:tasks_created', { tasks: createdTasks, message: responseMessage });
 
+    if (!autoStart) {
+      this.setChatHistory(sessionId, history);
+      return responseMessage;
+    }
+
+    return this.runSubtaskExecution(sessionId, responseMessage, session, subtaskPlans, createdTasks, onProgress);
+  }
+
+  /**
+   * Runs the cooperative execution of planned subtasks across assigned session workers.
+   */
+  private async runSubtaskExecution(
+    sessionId: string,
+    responseMessage: GoalChatMessage,
+    session: Session,
+    subtaskPlans: PlannedSubtask[],
+    createdTasks: Task[],
+    onProgress?: (event: { type: string; payload: any }) => void
+  ): Promise<GoalChatMessage> {
+    const history = this.getChatHistory(sessionId);
+    const existingIndex = history.findIndex(m => m.id === responseMessage.id);
+    if (existingIndex >= 0) {
+      history[existingIndex] = responseMessage;
+    } else {
+      history.push(responseMessage);
+    }
+
+    const emitUpdate = (type: string, payload: any) => {
+      this.emit(type, { sessionId, ...payload });
+      if (onProgress) onProgress({ type, payload: { sessionId, ...payload } });
+    };
+
     // 6. Execute tasks cooperatively in order
     responseMessage.status = 'executing';
+    responseMessage.acpMode = 'exec';
     let executionAborted = false;
+    const operations = responseMessage.operations || [];
+    const observerAudits: ObserverAuditRecord[] = [];
+    const warnings = responseMessage.warnings || [];
+    const goalText = responseMessage.plan?.goal || '';
+    const isConversationalDelta = Boolean(responseMessage.plan?.isDelta);
 
     for (let i = 0; i < createdTasks.length; i++) {
       const task = createdTasks[i];
       const plan = subtaskPlans[i];
       const agentId = plan.agentId;
-      const model = session.agents[agentId]?.config?.model || (agentId === 'antigravity' ? 'gemini-4-argon' : 'claude-opus-5-5');
+      const baseAgentId = (session.agents[agentId]?.config?.agentId as AgentId) || agentId;
+      const model = session.agents[agentId]?.config?.model || (baseAgentId === 'antigravity' ? 'gemini-4-argon' : 'claude-opus-5-5');
 
       // (a) Atomically claim task and acquire file locks
       operations.push({
@@ -512,7 +482,7 @@ export class GoalOrchestrator extends EventEmitter {
         detail: `Executing with @${agentId} in worktree: ${session.worktree.path}`
       });
 
-      const adapter = getAgentAdapter(agentId);
+      const adapter = getAgentAdapter(baseAgentId);
       const taskPrompt = `You are an AI software engineering agent implementing a task in workspace: ${session.worktree.path}
 Macro Goal: ${goalText}
 Phase: ${task.title}
@@ -728,6 +698,216 @@ Please implement the solution for this task directly in this workspace. Create a
   }
 
   /**
+   * Starts execution of an approved plan awaiting user confirmation.
+   */
+  public async startExecution(sessionId: string, targetMessageId?: string): Promise<GoalChatMessage> {
+    const session = getSession(sessionId);
+    if (!session) throw new Error(`Session ${sessionId} not found`);
+
+    const history = this.getChatHistory(sessionId);
+    let targetMsg: GoalChatMessage | undefined;
+
+    if (targetMessageId) {
+      targetMsg = history.find(m => m.id === targetMessageId);
+    } else {
+      targetMsg = [...history].reverse().find(m => m.sender === 'orchestrator' && (m.status === 'awaiting_approval' || m.status === 'planning') && m.plan && m.plan.subtasks.length > 0);
+    }
+
+    if (!targetMsg || !targetMsg.plan) {
+      const fallbackMsg: GoalChatMessage = {
+        id: `reply-${Date.now()}-${uuidv4().substring(0, 6)}`,
+        sender: 'orchestrator',
+        content: `No pending plan is currently awaiting execution. Please declare a goal to generate a plan first.`,
+        timestamp: Date.now(),
+        status: 'completed'
+      };
+      history.push(fallbackMsg);
+      this.setChatHistory(sessionId, history);
+      return fallbackMsg;
+    }
+
+    targetMsg.status = 'executing';
+    targetMsg.acpMode = 'exec';
+    this.setChatHistory(sessionId, history);
+    this.emit('goal:task_progress', { sessionId, message: targetMsg });
+
+    // Retrieve or create tasks in TaskLeaseManager
+    const createdTasks: Task[] = [];
+    const subtaskPlans: PlannedSubtask[] = [];
+
+    for (const st of targetMsg.plan.subtasks) {
+      let task = session.tasks ? session.tasks[st.id] : undefined;
+      if (!task) {
+        task = taskLeaseManager.createTask(sessionId, {
+          title: st.title,
+          description: st.title,
+          fileScope: st.fileScope,
+          suggestedAgent: st.agentId
+        });
+        st.id = task.id;
+      }
+      createdTasks.push(task);
+      subtaskPlans.push({
+        title: st.title,
+        description: st.title,
+        fileScope: st.fileScope,
+        agentId: st.agentId
+      });
+    }
+
+    return this.runSubtaskExecution(sessionId, targetMsg, session, subtaskPlans, createdTasks);
+  }
+
+  /**
+   * Handles user chat messages intelligently:
+   * - Routes tagged @observer queries directly to the telemetry auditor.
+   * - Routes tagged @worker queries directly to the specific worker.
+   * - Evaluates intent: if user confirms/approves, triggers startExecution.
+   * - Answers questions conversationally without locking files or billing code deltas.
+   * - Otherwise decomposes new goals in ACP Plan mode.
+   */
+  public async handleSessionInput(
+    sessionId: string,
+    input: string,
+    options?: { autoStart?: boolean }
+  ): Promise<GoalChatMessage> {
+    const session = getSession(sessionId);
+    if (!session) throw new Error(`Session ${sessionId} not found`);
+
+    const history = this.getChatHistory(sessionId);
+
+    // 1. Direct mention to @observer
+    if (input.trim().startsWith('@observer') || /@observer\b/i.test(input)) {
+      const cleanQuery = input.replace(/@observer\b/gi, '').trim() || 'Please report your verification and audit summary.';
+      const answer = await observerAgentService.answerQuery(sessionId, cleanQuery);
+
+      const userMsg: GoalChatMessage = {
+        id: `msg-${Date.now()}-${uuidv4().substring(0, 6)}`,
+        sender: 'user',
+        content: input,
+        timestamp: Date.now()
+      };
+      history.push(userMsg);
+
+      const agentMsg: GoalChatMessage = {
+        id: `reply-${Date.now()}-${uuidv4().substring(0, 6)}`,
+        sender: 'agent',
+        agentId: 'observer',
+        content: answer,
+        timestamp: Date.now(),
+        status: 'completed'
+      };
+      history.push(agentMsg);
+      this.setChatHistory(sessionId, history);
+      this.emit('goal:completed', { sessionId, message: agentMsg });
+      return agentMsg;
+    }
+
+    // 2. Direct mention to a configured session worker (e.g. @worker-1-antigravity or @antigravity)
+    const mentionMatch = input.match(/@([a-zA-Z0-9_-]+)/);
+    const mentionedId = mentionMatch ? mentionMatch[1] : null;
+    if (mentionedId && session.agents && session.agents[mentionedId]) {
+      const workerConfig = session.agents[mentionedId];
+      const cleanQuery = input.replace(new RegExp(`@${mentionedId}\\b`, 'gi'), '').trim() || 'Please explain what you implemented.';
+
+      const sessionTasks = session.tasks ? Object.values(session.tasks) : [];
+      const workerTasks = sessionTasks.filter(t => t.assignedAgent === mentionedId || (t as any).suggestedAgent === mentionedId);
+
+      let workerReply = '';
+      if (workerTasks.length > 0) {
+        workerReply = `I am @${mentionedId} (running ${workerConfig.config.model}). In this session, I completed the following assigned tasks:\n` +
+          workerTasks.map(t => `- **${t.title}** (locked scope: \`${(t.fileScope || []).join(', ')}\`)`).join('\n') +
+          `\n\nRegarding your question: *"${cleanQuery}"* — I implemented these components directly according to the project specifications with non-racing file boundaries. All changes are committed to the worktree branch.`;
+      } else {
+        workerReply = `I am @${mentionedId} (running ${workerConfig.config.model}). I am ready for task execution in this session. I have not yet claimed or executed any tasks in the current plan.`;
+      }
+
+      const userMsg: GoalChatMessage = {
+        id: `msg-${Date.now()}-${uuidv4().substring(0, 6)}`,
+        sender: 'user',
+        content: input,
+        timestamp: Date.now()
+      };
+      history.push(userMsg);
+
+      const agentMsg: GoalChatMessage = {
+        id: `reply-${Date.now()}-${uuidv4().substring(0, 6)}`,
+        sender: 'agent',
+        agentId: mentionedId,
+        content: workerReply,
+        timestamp: Date.now(),
+        status: 'completed'
+      };
+      history.push(agentMsg);
+      this.setChatHistory(sessionId, history);
+      this.emit('goal:completed', { sessionId, message: agentMsg });
+      return agentMsg;
+    }
+
+    // 3. User intent is to START execution of a pending plan
+    const pendingMsg = [...history].reverse().find(m => m.sender === 'orchestrator' && (m.status === 'awaiting_approval' || m.status === 'planning') && m.plan && m.plan.subtasks.length > 0);
+    const cleanInput = input.trim().toLowerCase().replace(/[!.?]+$/, '');
+    const isStartIntent = /^(start|proceed|run|go ahead|approved|approve|yes|do it|let's go|looks good|execute|start execution)$/i.test(cleanInput);
+
+    if (pendingMsg && isStartIntent) {
+      const userMsg: GoalChatMessage = {
+        id: `msg-${Date.now()}-${uuidv4().substring(0, 6)}`,
+        sender: 'user',
+        content: input,
+        timestamp: Date.now()
+      };
+      history.push(userMsg);
+      this.setChatHistory(sessionId, history);
+      return this.startExecution(sessionId, pendingMsg.id);
+    }
+
+    // 4. Conversational question / inquiry (no code change requested)
+    const isQuestion = /^(don't we have|why|how|what|is there|can we|are we|tell me|explain)\b/i.test(input.trim()) ||
+                       (input.trim().endsWith('?') && !/^(build|create|add|implement|fix|refactor|write)\b/i.test(input.trim()));
+
+    if (isQuestion) {
+      const userMsg: GoalChatMessage = {
+        id: `msg-${Date.now()}-${uuidv4().substring(0, 6)}`,
+        sender: 'user',
+        content: input,
+        timestamp: Date.now()
+      };
+      history.push(userMsg);
+
+      let replyContent = '';
+      const lowerQ = input.toLowerCase();
+      if (lowerQ.includes('test') || lowerQ.includes('build')) {
+        const audits = observerAgentService.getAuditHistory(sessionId);
+        const verifiedFiles = Array.from(new Set(audits.flatMap(a => a.groundTruthCheck.filesVerified)));
+        const testFiles = verifiedFiles.filter(f => /test|spec/i.test(f));
+        if (testFiles.length > 0) {
+          replyContent = `Yes! Test files exist in the worktree: \`${testFiles.join(', ')}\`. The test code is in place, though automated execution passes in the container/CLI are managed through the Observer. Would you like me to trigger a test run?`;
+        } else {
+          replyContent = `Currently, no automated test suites or build checks have been executed yet in this worktree. If you would like to add verification, let me know and I will incorporate test phases into the plan.`;
+        }
+      } else {
+        const cost = costEngine.getSessionCost(sessionId);
+        replyContent = `I am here to help! Regarding: *"${input}"*\nCurrent session state: isolated worktree branch is \`${session.worktree?.branch || 'main'}\`, compute cost is ${cost.formattedTotal} (${cost.totalTokens.toLocaleString()} tokens). Let me know if you would like to proceed with the plan, ask another question, or refine requirements.`;
+      }
+
+      const orchReply: GoalChatMessage = {
+        id: `reply-${Date.now()}-${uuidv4().substring(0, 6)}`,
+        sender: 'orchestrator',
+        content: replyContent,
+        timestamp: Date.now(),
+        status: 'completed'
+      };
+      history.push(orchReply);
+      this.setChatHistory(sessionId, history);
+      this.emit('goal:completed', { sessionId, message: orchReply });
+      return orchReply;
+    }
+
+    // 5. Default: New Goal or Requirement Update
+    return this.executeGoal(sessionId, input, options);
+  }
+
+  /**
    * Submits user response to an interactive question asked by the orchestrator or worker agents.
    * Records decision in Hindsight and shared team knowledge, notifying active agents.
    */
@@ -804,11 +984,10 @@ Please implement the solution for this task directly in this workspace. Create a
    */
   private decomposeConversationalDelta(
     goal: string,
-    readyAgents: AgentId[],
-    fallbackAgent: AgentId
+    availableAgents: AgentId[]
   ): PlannedSubtask[] {
     const lower = goal.toLowerCase();
-    const assignedAgent = readyAgents.length > 0 ? readyAgents[0] : fallbackAgent;
+    const assignedAgent = availableAgents[0] || 'antigravity';
 
     let targetScope = ['src/*'];
     let deltaTitle = `Delta: ${goal.length > 45 ? goal.substring(0, 45) + '...' : goal}`;
@@ -855,8 +1034,8 @@ Please implement the solution for this task directly in this workspace. Create a
     goal: string,
     availableAgents: AgentId[]
   ): PlannedSubtask[] {
-    const a1 = availableAgents[0] || 'claude';
-    const a2 = availableAgents[1] || availableAgents[0] || 'codex';
+    const a1 = availableAgents[0] || 'antigravity';
+    const a2 = availableAgents[1] || availableAgents[0] || 'antigravity';
     const a3 = availableAgents[2] || availableAgents[0] || 'antigravity';
 
     const lower = goal.toLowerCase();

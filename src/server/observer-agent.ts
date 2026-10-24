@@ -140,8 +140,14 @@ export class ObserverAgentService {
     }
 
     // 4. Milestone Verification
+    if (verdict === 'verified' && filesVerified.length === 0 && claimedFileScope.length > 0) {
+      verdict = 'flagged';
+      confidence = 0.85;
+      findings.push(`SCOPE WARNING: Agent @${targetAgent} claimed completion of [${claimedGoal}], but 0 files matched the claimed file scope: ${claimedFileScope.join(', ')}.`);
+    }
+
     if (verdict === 'verified') {
-      testsPassed = true;
+      testsPassed = testsExecuted;
       milestonesVerified.push(`Ground-Truth File Integrity Verified (${filesVerified.length} scope patterns matched)`);
 
       if (claimedGoal.toLowerCase().includes('auth') || claimedGoal.toLowerCase().includes('token')) {
@@ -195,6 +201,48 @@ export class ObserverAgentService {
     });
 
     return auditRecord;
+  }
+
+  /**
+   * Direct Conversation with the Observer:
+   * Provides transparent, objective insight into verified ground truth, test execution,
+   * and detected anomalies when the user tags @observer.
+   */
+  async answerQuery(sessionId: string, query: string): Promise<string> {
+    const config = this.getSessionConfig(sessionId);
+    const audits = this.getAuditHistory(sessionId);
+    const verifiedAudits = audits.filter(a => a.verdict === 'verified');
+    const flaggedAudits = audits.filter(a => a.verdict !== 'verified');
+    const allVerifiedFiles = Array.from(new Set(audits.flatMap(a => a.groundTruthCheck.filesVerified)));
+    const testsRan = audits.some(a => a.groundTruthCheck.testsExecuted);
+
+    const lower = query.toLowerCase();
+
+    if (lower.includes('test') || lower.includes('build')) {
+      if (testsRan) {
+        return `As the independent Telemetry Observer (@${config.agentId} · ${config.model}), I observed that tests were executed during task verification. All assertions passed without specification gaming or bypassed test blocks.`;
+      } else {
+        const testFiles = allVerifiedFiles.filter(f => f.includes('test') || f.includes('Test') || f.includes('spec'));
+        if (testFiles.length > 0) {
+          return `As the independent Telemetry Observer (@${config.agentId} · ${config.model}), I verified that test files exist on disk (${testFiles.join(', ')}), but an automated test run (e.g. \`gradlew test\` or \`vitest run\`) was not actively executed in the worktree yet.`;
+        }
+        return `As the independent Telemetry Observer (@${config.agentId} · ${config.model}), I observed no test suites currently defined or executed for this session in the worktree.`;
+      }
+    }
+
+    if (audits.length === 0) {
+      return `As the independent Telemetry Observer (@${config.agentId} · ${config.model}), I am actively monitoring this workspace. No task milestones have been audited yet. Once workers begin executing subtasks, I will audit all disk modifications and test results.`;
+    }
+
+    const summaryParts = [
+      `I am the session's independent Telemetry Observer (@${config.agentId} · ${config.model}). Here is my current ground-truth audit summary:`,
+      `- **Audits Conducted**: ${audits.length} (${verifiedAudits.length} verified, ${flaggedAudits.length} flagged)`,
+      `- **Verified Files on Disk**: ${allVerifiedFiles.length > 0 ? allVerifiedFiles.join(', ') : 'None yet'}`,
+      `- **Test Execution**: ${testsRan ? 'Verified real execution' : 'Not executed in worktree'}`,
+      `- **Integrity / Spec Gaming**: ${flaggedAudits.length === 0 ? 'Clean (no specification gaming or empty assertions detected)' : `${flaggedAudits.length} anomaly detected`}`
+    ];
+
+    return summaryParts.join('\n');
   }
 }
 

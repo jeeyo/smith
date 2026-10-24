@@ -339,13 +339,15 @@ export interface InteractiveQuestion {
 
 export interface GoalChatMessage {
   id: string;
-  sender: 'user' | 'orchestrator' | 'system';
+  sender: 'user' | 'orchestrator' | 'system' | 'agent';
+  agentId?: AgentId | string;
+  acpMode?: 'plan' | 'exec' | 'chat';
   content: string;
   timestamp: number;
   orchestratorAgentId?: AgentId;
   orchestratorModel?: string;
   questions?: InteractiveQuestion[];
-  status?: 'planning' | 'executing' | 'completed' | 'error';
+  status?: 'planning' | 'awaiting_approval' | 'executing' | 'completed' | 'error';
   warnings?: Array<{
     agentId: string;
     type: 'rate_limit' | 'auth_required' | 'delegated' | 'warning';

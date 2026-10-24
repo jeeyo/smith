@@ -287,4 +287,97 @@ describe('Goal Orchestrator & Single Chat Interface Tests', () => {
     freshOrchestrator.deleteChatHistory(testSessionId);
     expect(freshOrchestrator.getChatHistory(testSessionId).length).toBe(0);
   });
+
+  it('Elephant protocol gated execution stays in awaiting_approval until user triggers start', async () => {
+    const gatedGoal = 'Build a notification event listener service';
+    const res = await request(app)
+      .post(`/api/v1/sessions/${sessionId}/goal`)
+      .send({ goal: gatedGoal, autoStart: false });
+
+    expect(res.status).toBe(200);
+    const msg = res.body.message;
+    expect(msg.status).toBe('awaiting_approval');
+    expect(msg.acpMode).toBe('plan');
+    expect(msg.questions).toBeDefined();
+    expect(msg.questions.length).toBeGreaterThan(1); // Multi-question elicitation
+
+    // Now send "start"
+    const startRes = await request(app)
+      .post(`/api/v1/sessions/${sessionId}/goal`)
+      .send({ goal: 'start' });
+
+    expect(startRes.status).toBe(200);
+    const completedMsg = startRes.body.message;
+    expect(completedMsg.status).toBe('completed');
+    expect(completedMsg.acpMode).toBe('exec');
+  });
+
+  it('strictly restricts worker assignment to configured session agents only', async () => {
+    // Create a session with strictly antigravity workers
+    const strictRes = await request(app)
+      .post('/api/v1/sessions')
+      .send({
+        name: 'Strict Workers Test',
+        repoPath: path.join(os.tmpdir(), 'smith-test-repo'),
+        macroGoal: 'Android notifications listener',
+        agents: [
+          { agentId: 'antigravity', workerId: 'worker-1-antigravity', model: 'gemini-2.5-pro', mode: 'acp' },
+          { agentId: 'antigravity', workerId: 'worker-2-antigravity', model: 'gemini-2.5-pro', mode: 'acp' }
+        ]
+      });
+
+    const strictSessionId = strictRes.body.id;
+    const planRes = await request(app)
+      .post(`/api/v1/sessions/${strictSessionId}/goal`)
+      .send({ goal: 'Build a native android app that listens to phone notifications', autoStart: false });
+
+    const msg = planRes.body.message;
+    expect(msg.plan).toBeDefined();
+    const assignedAgents = msg.plan.subtasks.map((st: any) => st.agentId);
+
+    // Verify Claude and Codex are NEVER assigned
+    expect(assignedAgents).not.toContain('claude');
+    expect(assignedAgents).not.toContain('codex');
+    for (const a of assignedAgents) {
+      expect(['worker-1-antigravity', 'worker-2-antigravity', 'antigravity']).toContain(a);
+    }
+  });
+
+  it('direct tagging of @observer routes to observer with direct answer', async () => {
+    const res = await request(app)
+      .post(`/api/v1/sessions/${sessionId}/goal`)
+      .send({ goal: '@observer what did you verify?' });
+
+    expect(res.status).toBe(200);
+    const msg = res.body.message;
+    expect(msg.sender).toBe('agent');
+    expect(msg.agentId).toBe('observer');
+    expect(msg.content).toContain('Observer');
+    expect(msg.plan).toBeUndefined(); // Did not create a fake code delta!
+  });
+
+  it('direct tagging of worker routes to that worker for explanation without code delta', async () => {
+    const res = await request(app)
+      .post(`/api/v1/sessions/${sessionId}/goal`)
+      .send({ goal: '@codex explain what you did' });
+
+    expect(res.status).toBe(200);
+    const msg = res.body.message;
+    expect(msg.sender).toBe('agent');
+    expect(msg.agentId).toBe('codex');
+    expect(msg.content).toContain('codex');
+    expect(msg.plan).toBeUndefined(); // Did not create a fake code delta!
+  });
+
+  it('conversational questions answer directly without creating subtasks or locking files', async () => {
+    const res = await request(app)
+      .post(`/api/v1/sessions/${sessionId}/goal`)
+      .send({ goal: "don't we have unit test or build check?" });
+
+    expect(res.status).toBe(200);
+    const msg = res.body.message;
+    expect(msg.sender).toBe('orchestrator');
+    expect(msg.content.length).toBeGreaterThan(10);
+    expect(msg.plan).toBeUndefined(); // No subtasks!
+  });
 });

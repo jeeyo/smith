@@ -238,6 +238,25 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleStartExecution = async (sessionId: string) => {
+    setIsOrchestrating(true);
+    try {
+      const res = await fetch(`/api/v1/sessions/${sessionId}/goal/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      if (data.message) {
+        fetchChat(sessionId);
+        fetchCost(sessionId);
+      }
+    } catch (err) {
+      console.error('Start execution error', err);
+    } finally {
+      setIsOrchestrating(false);
+    }
+  };
+
   const handleSendGoal = async (goal: string) => {
     if (!currentSession) {
       // Auto-create a session if none exists
@@ -447,6 +466,7 @@ export const App: React.FC = () => {
               messages={chatMessages}
               isOrchestrating={isOrchestrating}
               onSendGoal={handleSendGoal}
+              onStartExecution={handleStartExecution}
               availableModels={availableModels}
               costSummary={costSummary}
               onOpenTerminal={handleOpenTerminal}
