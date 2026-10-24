@@ -3,6 +3,8 @@ dist/
 dist-server/
 dist-electron/
 release/
+src-tauri/target/
+src-tauri/gen/
 .smith/
 .worktrees/
 

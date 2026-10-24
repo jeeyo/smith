@@ -34,6 +34,24 @@ jobs:
       - name: Run Vitest tests
         run: npm test
 
+  tauri-validate:
+    name: Validate Tauri Shell (cargo check)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Cargo Check
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+
   docker-validate:
     name: Validate Docker Build (amd64)
     runs-on: ubuntu-latest

@@ -3,7 +3,6 @@
   "version": "0.1.1",
   "description": "Smith",
   "type": "module",
-  "main": "dist-electron/main.cjs",
   "author": "jeeyo <jeeyo@outlook.com>",
   "repository": {
     "type": "git",
@@ -14,70 +13,18 @@
     "dev": "vite",
     "build:ui": "vite build",
     "build:server": "esbuild src/server/index.ts --bundle --platform=node --target=node22 --outfile=dist-server/index.cjs --external:fsevents --external:@vectorize-io/hindsight-all --external:@vectorize-io/hindsight-client",
-    "build:electron": "esbuild src/electron/main.ts --bundle --platform=node --target=node22 --outfile=dist-electron/main.cjs --external:electron && esbuild src/electron/preload.ts --bundle --platform=node --target=node22 --outfile=dist-electron/preload.cjs --external:electron",
-    "build": "tsc && npm run build:ui && npm run build:server && npm run build:electron",
+    "build": "tsc && npm run build:ui && npm run build:server",
     "preview": "vite preview",
     "server": "tsx watch src/server/index.ts",
     "start": "tsx src/server/index.ts",
-    "electron": "electron .",
-    "electron:dev": "npm run build:server && npm run build:electron && electron .",
-    "electron:pack": "npm run build && electron-builder --dir",
-    "electron:dist": "npm run build && electron-builder",
-    "test": "vitest run"
-  },
-  "build": {
-    "appId": "com.jeeyo.smith",
-    "productName": "Smith",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/**/*",
-      "dist-electron/**/*",
-      "dist-server/**/*",
-      "public/**/*",
-      "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "node_modules/@vectorize-io",
-        "to": "node_modules/@vectorize-io"
-      }
-    ],
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": ["x64"]
-        },
-        {
-          "target": "zip",
-          "arch": ["x64"]
-        }
-      ],
-      "icon": "public/icon.png"
-    },
-    "mac": {
-      "target": [
-        {
-          "target": "dmg",
-          "arch": ["arm64", "x64"]
-        },
-        {
-          "target": "zip",
-          "arch": ["arm64", "x64"]
-        }
-      ],
-      "category": "public.app-category.developer-tools",
-      "icon": "public/icon.png"
-    },
-    "linux": {
-      "target": ["AppImage", "tar.gz"],
-      "category": "Development",
-      "icon": "public/icon.png"
-    }
+    "test": "vitest run",
+    "tauri": "tauri",
+    "tauri:dev": "concurrently -k -p \"[{name}]\" -n \"SERVER,VITE,TAURI\" -c \"blue,green,magenta\" \"tsx watch src/server/index.ts\" \"vite\" \"tauri dev\"",
+    "tauri:build": "npm run build:ui && npm run build:server && tauri build"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-shell": "^2.5.0",
     "@types/ws": "^8.5.14",
     "@vectorize-io/hindsight-all": "^1.0.0",
     "@vectorize-io/hindsight-client": "^1.0.0",
@@ -97,6 +44,7 @@
     "ws": "^8.18.1"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/node": "^22.13.10",
@@ -107,8 +55,7 @@
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.21",
-    "electron": "^45.0.0",
-    "electron-builder": "^26.15.3",
+    "concurrently": "^10.0.6",
     "esbuild": "^0.28.2",
     "postcss": "^8.5.3",
     "puppeteer-core": "^25.15.0",

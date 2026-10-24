@@ -187,6 +187,14 @@ if (!process.env.VITEST) {
     console.log(`🚀 Smith Orchestrator Server listening on http://localhost:${config.port}`);
     console.log(`📖 API Documentation available at http://localhost:${config.port}/api/docs`);
 
+    // Immediately warm up and verify Hindsight memory daemon if autoStartDaemon is enabled
+    if (config.hindsightAutoStartDaemon) {
+      console.log('🔄 Checking and initializing Hindsight memory daemon in background...');
+      hindsightService.checkHealth().catch((err) => {
+        console.warn('[hindsight] Startup check warning:', err);
+      });
+    }
+
     // Seed default session if needed
     try {
       const res = await fetch(`http://localhost:${config.port}/api/v1/sessions`);

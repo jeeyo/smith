@@ -6,6 +6,7 @@ import { GoalChat } from './components/GoalChat.tsx';
 import { CustomizationsDrawer } from './components/CustomizationsDrawer.tsx';
 import { NewSessionModal } from './components/NewSessionModal.tsx';
 import { TerminalModal } from './components/TerminalModal.tsx';
+import { StartupProgressModal } from './components/StartupProgressModal.tsx';
 import {
   Session,
   DiscoveredModel,
@@ -42,6 +43,16 @@ export const App: React.FC = () => {
   const [isRefreshingModels, setIsRefreshingModels] = useState(false);
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
   const [terminalInitialCmd, setTerminalInitialCmd] = useState('claude login');
+  const [isStartupModalOpen, setIsStartupModalOpen] = useState(true);
+  const [sessionsLoaded, setSessionsLoaded] = useState(false);
+
+  // If loaded on Tauri custom domain, redirect to local server port
+  useEffect(() => {
+    if (window.location.hostname === 'tauri.localhost' || window.location.protocol === 'tauri:') {
+      console.log('[Tauri] Redirecting webview to backend server at http://127.0.0.1:4100');
+      window.location.replace('http://127.0.0.1:4100');
+    }
+  }, []);
 
   // Initial Data Fetch
   useEffect(() => {
@@ -139,6 +150,8 @@ export const App: React.FC = () => {
       }
     } catch (err) {
       console.error(err);
+    } finally {
+      setSessionsLoaded(true);
     }
   };
 
@@ -492,6 +505,15 @@ export const App: React.FC = () => {
         onClose={() => setIsTerminalOpen(false)}
         initialCommand={terminalInitialCmd}
         onRefreshHealth={fetchHealth}
+      />
+
+      <StartupProgressModal
+        isOpen={isStartupModalOpen}
+        onDismiss={() => setIsStartupModalOpen(false)}
+        hindsightConnected={hindsightConnected}
+        agentHealth={agentHealth}
+        sessionsLoaded={sessionsLoaded}
+        sessionsCount={sessions.length}
       />
 
       {currentSession && (

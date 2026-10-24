@@ -31,6 +31,15 @@
 }
 
 /* Markdown Content Styles */
+.select-text,
+.markdown-body,
+.markdown-body *,
+.chat-message-bubble,
+.chat-message-bubble * {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
 .markdown-body {
   color: #e4e4e7;
   font-size: 0.875rem;

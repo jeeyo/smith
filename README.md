@@ -4,7 +4,7 @@
 [![Release](https://github.com/jeeyo/smith/actions/workflows/release.yml/badge.svg)](https://github.com/jeeyo/smith/actions/workflows/release.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-Smith ADE is a high-performance, API-first **Cooperative Agentic Development Environment** packaged as a cross-platform desktop application using **Electron** and as a multi-arch container image with **Docker**. It provides dual-layer persistent memory powered by the official **Vectorize Hindsight** daemon, real-time multi-agent orchestration, interactive human-in-the-loop clarifications, dynamic model discovery, and cost telemetry.
+Smith ADE is a high-performance, API-first **Cooperative Agentic Development Environment** packaged as a lightweight, blazing-fast native desktop application using **Tauri 2.0** and as a multi-arch container image with **Docker**. It provides dual-layer persistent memory powered by the official **Vectorize Hindsight** daemon, real-time multi-agent orchestration, interactive human-in-the-loop clarifications, dynamic model discovery, and cost telemetry.
 
 ![Smith ADE Desktop Interface](docs/images/screenshot_left_sidebar_chat_list.png)
 
@@ -12,7 +12,7 @@ Smith ADE is a high-performance, API-first **Cooperative Agentic Development Env
 
 ## 🌟 Key Features
 
-- 🖥️ **Cross-Platform Electron Desktop App**: Single-window desktop experience with native lifecycle management, hardware acceleration, and integrated background server supervision.
+- 🖥️ **Ultra-Lightweight Tauri 2.0 Desktop App**: Native Rust desktop shell powered by OS WebView2 / WebKit, with native lifecycle management, sidecar server supervision, and ~97% smaller installer size compared to Electron (~4 MB vs ~120 MB).
 - 🐳 **Multi-Arch Docker Container (`amd64` & `arm64`)**: Ready-to-deploy container published to GitHub Container Registry (`ghcr.io/jeeyo/smith`), pre-bundled with **Node.js 22**, **Astral `uv`/`uvx`**, Git, and pre-warmed **Vectorize Hindsight** daemon for instant server deployments.
 - 🗂️ **Collapsible Left Sidebar**: Clean, dedicated chat session management with real-time search, Git worktree branch badges, active session indicators, one-click deletion, and collapsible icon view.
 - ⚙️ **Application-Level Configuration Hub**: In-app configuration dashboard (`SettingsView`) to customize executable paths for **Claude Code**, **Google Antigravity**, **OpenCode**, **Codex**, and **Astral `uv`/`uvx`**, alongside **Vectorize Hindsight** provider selection (`openai`, `anthropic`, `gemini`, `ollama`), masked API keys, and workspace defaults with live on-disk path verification.
@@ -88,11 +88,11 @@ npm install
 #### Running in Development
 
 ```bash
-# Run web client + server in development mode
-npm run dev
+# Launch the full Tauri native desktop app with live reload
+npm run tauri:dev
 
-# Or launch the full Electron desktop app with live reload
-npm run electron:dev
+# Or run web client + server in browser mode
+npm run dev
 ```
 
 #### Running Test Suite
@@ -105,14 +105,11 @@ npm test
 #### Packaging Desktop Installers
 
 ```bash
-# Full build and packaging for current OS
-npm run electron:dist
-
-# Pack unpacked directory without installer
-npm run electron:pack
+# Full build and packaging of native Tauri installers for current OS
+npm run tauri:build
 ```
 
-The output packages will be located in the `release/` directory.
+The output packages will be located in the `src-tauri/target/release/bundle/` directory.
 
 ---
 
@@ -121,7 +118,7 @@ The output packages will be located in the `release/` directory.
 ```mermaid
 flowchart TD
     subgraph HostOptions ["Deployment Runtimes"]
-        Electron["Electron Desktop App (Win / Mac / Linux)"]
+        Tauri["Tauri 2.0 Desktop App (Win / Mac / Linux)"]
         Docker["Docker Container (linux/amd64 & linux/arm64)"]
     end
 
@@ -157,11 +154,12 @@ For more details, see:
 
 ## 🔄 CI / CD & Container Registry
 
-- **CI (`.github/workflows/ci.yml`)**: Automatically triggers on all pull/merge requests and pushes to `main`. Installs dependencies with `uv`, builds all targets, validates the Docker build, and runs the Vitest test suite.
+- **CI (`.github/workflows/ci.yml`)**: Automatically triggers on all pull/merge requests and pushes to `main`. Installs dependencies with `uv`, builds all targets, validates Tauri shell compilation, validates the Docker build, and runs the Vitest test suite.
 - **Automated Releases (`.github/workflows/release.yml`)**: Triggers on every semantic tag push matching `vX.X.X` (e.g., `v0.1.0`):
-  1. Builds multi-platform desktop installers (Windows `.exe`/`.zip`, Linux `.AppImage`/`.tar.gz`, macOS `.dmg`/`.zip`).
+  1. Builds multi-platform Tauri desktop installers (Windows `.exe`/`.msi`, Linux `.AppImage`/`.deb`, macOS `.dmg`).
   2. Builds and publishes multi-architecture Docker container images (`linux/amd64` and `linux/arm64`) to **GitHub Container Registry (`ghcr.io/jeeyo/smith`)** tagged with the semantic version and `latest`.
-  3. Publishes an official GitHub Release with auto-generated release notes and attached desktop binary artifacts.
+  3. Automatically updates and commits the Homebrew Cask formula `Casks/smith.rb` with the new version and calculated SHA256 checksums.
+  4. Publishes an official GitHub Release with auto-generated release notes and attached desktop binary artifacts.
 
 ---
 

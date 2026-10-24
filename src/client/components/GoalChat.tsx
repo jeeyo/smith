@@ -18,6 +18,7 @@ import {
   FileCode,
   Terminal as TerminalIcon,
   Check,
+  Copy,
   Radio,
   Database,
   Bug,
@@ -184,6 +185,7 @@ export const GoalChat: React.FC<GoalChatProps> = ({
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionStartIndex, setMentionStartIndex] = useState(-1);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -300,6 +302,12 @@ export const GoalChat: React.FC<GoalChatProps> = ({
     } catch {}
   };
 
+  const handleCopyMessage = (msgId: string, content: string) => {
+    navigator.clipboard.writeText(content);
+    setCopiedMessageId(msgId);
+    setTimeout(() => setCopiedMessageId(null), 2000);
+  };
+
   const sampleGoals = [
     'Build an authentication service with Ed25519 tokens, route guards, and integration tests',
     'Refactor REST endpoints to OpenAPI 3.0 specification with swagger generation',
@@ -307,9 +315,9 @@ export const GoalChat: React.FC<GoalChatProps> = ({
   ];
 
   return (
-    <div className="flex flex-col h-full w-full max-w-5xl mx-auto bg-zinc-950 text-zinc-100">
+    <div className="flex flex-col h-full w-full max-w-5xl mx-auto bg-zinc-950 text-zinc-100 select-text">
       {/* Messages Feed */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
+      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6 select-text">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
             <div className="w-12 h-12 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-4 text-zinc-300">
@@ -354,7 +362,7 @@ export const GoalChat: React.FC<GoalChatProps> = ({
             return (
               <div
                 key={msg.id}
-                className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} space-y-2`}
+                className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} space-y-2 group`}
               >
                 {/* Sender Label */}
                 <div className="flex items-center gap-2 px-1 text-xs text-zinc-400">
@@ -374,11 +382,28 @@ export const GoalChat: React.FC<GoalChatProps> = ({
                       {msg.status === 'awaiting_approval' ? 'Awaiting Approval' : msg.status}
                     </span>
                   )}
+                  <button
+                    onClick={() => handleCopyMessage(msg.id, msg.content)}
+                    title="Copy message text"
+                    className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-all flex items-center gap-1 text-[11px]"
+                  >
+                    {copiedMessageId === msg.id ? (
+                      <>
+                        <Check className="w-3 h-3 text-emerald-400" />
+                        <span className="text-emerald-400 text-[10px]">Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" />
+                        <span className="text-[10px]">Copy</span>
+                      </>
+                    )}
+                  </button>
                 </div>
 
                 {/* Message Bubble */}
                 <div
-                  className={`rounded-xl text-sm leading-relaxed ${
+                  className={`rounded-xl text-sm leading-relaxed select-text chat-message-bubble ${
                     isUser
                       ? 'bg-zinc-800 border border-zinc-700 text-zinc-100 px-4 py-3 max-w-2xl'
                       : isAgent

@@ -108,11 +108,11 @@ npm install
 # Start the Smith Orchestrator Server & Web Cockpit
 npm run server
 
-# Or run the desktop Electron app
-npm run electron:dev
+# Or launch the native Tauri desktop app
+npm run tauri:dev
 ```
 
-Open your browser or Electron app to:
+Open your browser or Tauri desktop app to:
 * **Smith UI**: `http://localhost:4100`
 * **Interactive OpenAPI Swagger Docs**: `http://localhost:4100/api/docs`
 

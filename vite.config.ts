@@ -3,8 +3,10 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  clearScreen: false,
   server: {
     port: 5173,
+    strictPort: true,
     proxy: {
       '/api': {
         target: 'http://localhost:4100',
@@ -15,5 +17,6 @@ export default defineConfig({
         ws: true
       }
     }
-  }
+  },
+  envPrefix: ['VITE_', 'TAURI_ENV_*']
 });

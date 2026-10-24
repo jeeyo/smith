@@ -18,14 +18,16 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            builder-args: --win
           - os: ubuntu-latest
-            builder-args: --linux
           - os: macos-latest
-            builder-args: --mac --arm64 --x64
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -36,6 +38,12 @@ jobs:
       - name: Setup uv
         uses: astral-sh/setup-uv@v5
 
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
       - name: Install dependencies
         run: npm ci
 
@@ -45,23 +53,49 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Build Electron distributions
-        run: npx electron-builder ${{ matrix.builder-args }} --publish never
+      - name: Build Tauri desktop app (Windows / Linux)
+        if: matrix.os != 'macos-latest'
+        run: npx tauri build
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Tauri desktop app (macOS Universal Targets)
+        if: matrix.os == 'macos-latest'
+        run: |
+          npx tauri build --target aarch64-apple-darwin
+          npx tauri build --target x86_64-apple-darwin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Gather release packages
+        shell: bash
+        run: |
+          mkdir -p release-packages
+          # Gather Windows installers and binaries
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            find src-tauri/target/release/bundle -type f \( -name "*.exe" -o -name "*.msi" \) -exec cp {} release-packages/ \;
+          fi
+
+          # Gather Linux AppImage and Deb packages
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            find src-tauri/target/release/bundle -type f \( -name "*.AppImage" -o -name "*.deb" \) -exec cp {} release-packages/ \;
+          fi
+
+          # Gather macOS DMG and tarball bundles
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+            find src-tauri/target/*/release/bundle -type f \( -name "*.dmg" -o -name "*.tar.gz" \) -exec cp {} release-packages/ \;
+            find src-tauri/target/release/bundle -type f \( -name "*.dmg" -o -name "*.tar.gz" \) -exec cp {} release-packages/ \; 2>/dev/null || true
+          fi
+
+          echo "Gathered artifacts in release-packages:"
+          ls -la release-packages/
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: electron-binaries-${{ matrix.os }}
-          path: |
-            release/*.exe
-            release/*.zip
-            release/*.dmg
-            release/*.AppImage
-            release/*.tar.gz
-          if-no-files-found: ignore
+          name: tauri-binaries-${{ matrix.os }}
+          path: release-packages/*
+          if-no-files-found: error
 
   docker:
     name: Build & Publish Docker Image (amd64 / arm64)
@@ -119,7 +153,6 @@ jobs:
         id: extract_version
         run: |
           TAG="${{ github.ref_name }}"
-          # Extract semantic version by stripping leading 'v'
           VERSION="${TAG#v}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
@@ -128,7 +161,7 @@ jobs:
       - name: Download all built artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: electron-binaries-*
+          pattern: tauri-binaries-*
           path: release-packages
           merge-multiple: true
 
@@ -145,8 +178,8 @@ jobs:
       - name: Update Homebrew Cask Formula
         run: |
           VERSION="${{ steps.extract_version.outputs.version }}"
-          ARM64_DMG=$(find release-packages -name "*-arm64.dmg" | head -n 1)
-          X64_DMG=$(find release-packages -name "*-x64.dmg" | head -n 1)
+          ARM64_DMG=$(find release-packages -name "*aarch64*.dmg" -o -name "*arm64*.dmg" | head -n 1)
+          X64_DMG=$(find release-packages -name "*x64*.dmg" -o -name "*x86_64*.dmg" | head -n 1)
 
           ARM64_SHA=""
           if [ -n "$ARM64_DMG" ] && [ -f "$ARM64_DMG" ]; then
