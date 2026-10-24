@@ -150,7 +150,7 @@ export const config: AppConfig = {
   hindsightApiKey: process.env.OPENAI_API_KEY || persistedConfig.hindsight?.apiKey || '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',
   hindsightProvider: process.env.HINDSIGHT_LLM_PROVIDER || persistedConfig.hindsight?.provider || 'openai',
   hindsightAutoStartDaemon: persistedConfig.hindsight?.autoStartDaemon ?? true,
-  hindsightDefaultBank: persistedConfig.hindsight?.defaultBank || 'smith-ade-global',
+  hindsightDefaultBank: persistedConfig.hindsight?.defaultBank || 'smith-global',
   defaultRepoPath: persistedConfig.app?.defaultRepoPath || '',
   currency: persistedConfig.app?.currency || 'USD',
   budgetAlertThreshold: persistedConfig.app?.budgetAlertThreshold ?? 20,
@@ -185,7 +185,7 @@ export const config: AppConfig = {
           apiKey: config.hindsightApiKey,
           url: config.hindsightUrl,
           autoStartDaemon: config.hindsightAutoStartDaemon ?? true,
-          defaultBank: config.hindsightDefaultBank || 'smith-ade-global'
+          defaultBank: config.hindsightDefaultBank || 'smith-global'
         },
         app: {
           gitPath: config.gitPath,

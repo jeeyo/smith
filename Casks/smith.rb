@@ -7,7 +7,7 @@ cask "smith" do
 
   url "https://github.com/jeeyo/smith/releases/download/v#{version}/Smith_#{version}_#{arch}.dmg"
   name "Smith"
-  desc "Autonomous Agentic Development Environment"
+  desc "Smith"
   homepage "https://github.com/jeeyo/smith"
 
   livecheck do

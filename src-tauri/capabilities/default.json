@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default permissions for Smith ADE",
+  "description": "Default permissions for Smith",
   "windows": ["main"],
   "permissions": [
     "core:default",

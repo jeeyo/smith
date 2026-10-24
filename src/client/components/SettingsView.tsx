@@ -44,7 +44,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, onSaved }) 
     apiKey: '',
     url: 'http://localhost:8888',
     autoStartDaemon: true,
-    defaultBank: 'smith-ade-global'
+    defaultBank: 'smith-global'
   });
 
   const [app, setApp] = useState({
@@ -178,7 +178,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, onSaved }) 
       ...prev,
       url: 'http://localhost:8888',
       provider: 'openai',
-      defaultBank: 'smith-ade-global'
+      defaultBank: 'smith-global'
     }));
   };
 
@@ -659,7 +659,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, onSaved }) 
                       type="text"
                       value={hindsight.defaultBank}
                       onChange={e => setHindsight({ ...hindsight, defaultBank: e.target.value })}
-                      placeholder="smith-ade-global"
+                      placeholder="smith-global"
                       className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 font-mono focus:outline-none focus:border-zinc-700"
                     />
                     <span className="text-[10px] text-zinc-500 mt-1 block">

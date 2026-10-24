@@ -1,12 +1,12 @@
-# Smith ADE (Agentic Development Environment)
+# Smith
 
 [![CI](https://github.com/jeeyo/smith/actions/workflows/ci.yml/badge.svg)](https://github.com/jeeyo/smith/actions/workflows/ci.yml)
 [![Release](https://github.com/jeeyo/smith/actions/workflows/release.yml/badge.svg)](https://github.com/jeeyo/smith/actions/workflows/release.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-Smith ADE is a high-performance, API-first **Cooperative Agentic Development Environment** packaged as a lightweight, blazing-fast native desktop application using **Tauri 2.0**. It provides dual-layer persistent memory powered by the official **Vectorize Hindsight** daemon, real-time multi-agent orchestration, interactive human-in-the-loop clarifications, dynamic model discovery, and cost telemetry.
+Smith is a high-performance, API-first **cooperative multi-agent coding environment** packaged as a lightweight, blazing-fast native desktop application using **Tauri 2.0**. It provides dual-layer persistent memory powered by the official **Vectorize Hindsight** daemon, real-time multi-agent orchestration, interactive human-in-the-loop clarifications, dynamic model discovery, and cost telemetry.
 
-![Smith ADE Desktop Interface](docs/images/screenshot_left_sidebar_chat_list.png)
+![Smith Desktop Interface](docs/images/screenshot_left_sidebar_chat_list.png)
 
 ---
 
@@ -28,7 +28,7 @@ Smith ADE is a high-performance, API-first **Cooperative Agentic Development Env
 
 ### Option A: Installing on macOS via Homebrew (Desktop App)
 
-Install Smith ADE directly onto macOS via Homebrew Cask from this repository:
+Install Smith directly onto macOS via Homebrew Cask from this repository:
 
 ```bash
 brew tap jeeyo/smith https://github.com/jeeyo/smith
@@ -41,7 +41,7 @@ Or install directly in one command:
 brew install --cask https://raw.githubusercontent.com/jeeyo/smith/main/Casks/smith.rb
 ```
 
-This installs `Smith ADE.app` into `/Applications` and creates a `smith` CLI alias in your terminal.
+This installs `Smith.app` into `/Applications` and creates a `smith` CLI alias in your terminal.
 
 ---
 
@@ -99,7 +99,7 @@ flowchart TD
         Tauri["Tauri 2.0 Native Desktop App (Win / Mac / Linux)"]
     end
 
-    subgraph AppHost ["Smith ADE Application Host"]
+    subgraph AppHost ["Smith Application Host"]
         Renderer["React 19 + Tailwind Client UI"]
         Sidebar["Collapsible Sidebar (Sidebar.tsx)"]
         SettingsView["Application Configuration (SettingsView.tsx)"]

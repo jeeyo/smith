@@ -141,7 +141,7 @@ export const StartupProgressModal: React.FC<StartupProgressModalProps> = ({
               S
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-zinc-100">Starting Smith ADE</h2>
+              <h2 className="text-sm font-semibold text-zinc-100">Starting Smith</h2>
               <p className="text-xs text-zinc-400">Initializing desktop environment & services</p>
             </div>
           </div>

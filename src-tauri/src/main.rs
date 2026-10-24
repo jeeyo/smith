@@ -237,7 +237,7 @@ fn spawn_backend_server() -> Option<Child> {
 }
 
 fn main() {
-    log_msg("Smith ADE starting up...");
+    log_msg("Smith starting up...");
 
     let child_handle: Arc<Mutex<Option<Child>>> = Arc::new(Mutex::new(None));
     let child_for_setup = Arc::clone(&child_handle);

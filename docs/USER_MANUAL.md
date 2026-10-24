@@ -1,10 +1,10 @@
 # Smith User Manual & Cockpit Guide
 
-Welcome to **Smith**—an API-first, cooperative **Agentic Development Environment (ADE)** built to manage, scale, and orchestrate multiple concurrent AI coding agents (**Claude Code**, **OpenAI Codex**, **Google Antigravity / Gemini**, and **OpenCode**) running natively on your personal or team subscriptions without pay-per-token API fees.
+Welcome to **Smith**—an API-first, cooperative multi-agent coding environment built to manage, scale, and orchestrate multiple concurrent AI coding agents (**Claude Code**, **OpenAI Codex**, **Google Antigravity / Gemini**, and **OpenCode**) running natively on your personal or team subscriptions without pay-per-token API fees.
 
 From the user's perspective, **Smith is a single, clean chat interface**: you declare your macro-goal in plain English, and the non-racing multi-agent execution (arXiv:2610.22319) happens entirely behind the scenes in isolated Git worktrees.
 
-![Smith ADE Desktop Interface](images/screenshot_left_sidebar_chat_list.png)
+![Smith Desktop Interface](images/screenshot_left_sidebar_chat_list.png)
 
 ---
 
@@ -324,7 +324,7 @@ When an agent generates a `.mmd` file or outputs a ````mermaid ... ```` markdown
 ![HTML Prototype Preview](images/screenshot_artifact_html.png)
 
 When an agent creates an HTML prototype (e.g. `auth_prototype.html` or inline ````html ```` snippets):
-- **Isolated Sandbox**: Rendered inside a secure `<iframe>` with strict sandbox restrictions (`allow-scripts allow-forms allow-same-origin allow-modals`), preventing unauthorized access to the host ADE application.
+- **Isolated Sandbox**: Rendered inside a secure `<iframe>` with strict sandbox restrictions (`allow-scripts allow-forms allow-same-origin allow-modals`), preventing unauthorized access to the host Smith application.
 - **Device Viewport Toggles**: Easily preview responsive layouts across three standard viewport widths:
   - **Desktop**: Full 100% container width.
   - **Tablet**: Fixed 768px width.
@@ -388,7 +388,7 @@ Configure exact executable paths and harnesses used for ACP workers:
 
 Configure the official Vectorize Hindsight daemon for cross-session episodic memory:
 - **Hindsight LLM Provider**: Dropdown selection supporting **OpenAI (GPT-4o, GPT-4.1)**, **Anthropic (Claude Sonnet / Opus)**, **Google Gemini (2.5 Pro / Flash)**, **Ollama (Local LLM)**, **Azure OpenAI**, or a **Custom Provider**.
-- **Default Knowledge Bank**: Primary memory bank identifier (default: `smith-ade-global`).
+- **Default Knowledge Bank**: Primary memory bank identifier (default: `smith-global`).
 - **Provider API Key / Secret Token**: Secure masked input with eye visibility toggle (`sk-proj-...`). Injected into the embedded daemon environment as `HINDSIGHT_API_LLM_API_KEY`.
 - **Server URL**: URL of the local embedded daemon or remote Hindsight instance (default: `http://localhost:8888`).
 - **Test Connection**: Live latency test button (`POST /api/v1/system/config/test-hindsight`) that verifies connectivity and displays ping latency in milliseconds.

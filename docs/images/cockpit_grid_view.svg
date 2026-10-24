@@ -29,7 +29,7 @@
   <rect x="90" y="16" width="28" height="28" rx="8" fill="url(#btnGrad)"/>
   <text x="128" y="35" fill="#f8fafc" font-family="Inter, sans-serif" font-weight="bold" font-size="16">Smith</text>
   <rect x="175" y="21" width="38" height="18" rx="4" fill="#082f49" stroke="#0369a1"/>
-  <text x="182" y="34" fill="#38bdf8" font-family="JetBrains Mono, monospace" font-size="10" font-weight="bold">ADE</text>
+  <text x="182" y="34" fill="#38bdf8" font-family="JetBrains Mono, monospace" font-size="10" font-weight="bold">App</text>
 
   <!-- Active Session Pill -->
   <text x="235" y="35" fill="#94a3b8" font-family="Inter, sans-serif" font-size="13">Auth Service Refactor</text>

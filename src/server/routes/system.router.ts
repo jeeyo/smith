@@ -52,7 +52,7 @@ systemRouter.get('/system/agents/status', async (req, res) => {
 
 systemRouter.get('/system/info', (req, res) => {
   res.json({
-    appName: 'Smith ADE',
+    appName: 'Smith',
     version: '1.0.0',
     platform: process.platform,
     arch: process.arch,
@@ -107,7 +107,7 @@ systemRouter.get('/system/config', (req, res) => {
       apiKey: config.hindsightApiKey,
       url: config.hindsightUrl,
       autoStartDaemon: config.hindsightAutoStartDaemon ?? true,
-      defaultBank: config.hindsightDefaultBank || 'smith-ade-global'
+      defaultBank: config.hindsightDefaultBank || 'smith-global'
     },
     app: {
       gitPath: config.gitPath,
@@ -134,7 +134,7 @@ systemRouter.put('/system/config', (req, res) => {
         apiKey: config.hindsightApiKey,
         url: config.hindsightUrl,
         autoStartDaemon: config.hindsightAutoStartDaemon ?? true,
-        defaultBank: config.hindsightDefaultBank || 'smith-ade-global'
+        defaultBank: config.hindsightDefaultBank || 'smith-global'
       },
       app: {
         gitPath: config.gitPath,

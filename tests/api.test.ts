@@ -55,7 +55,7 @@ describe('Smith HTTP REST API Integration Tests', () => {
       .send({
         name: 'API Test Session',
         repoPath: testRepoPath,
-        macroGoal: 'Implement integration test suite for Smith ADE',
+        macroGoal: 'Implement integration test suite for Smith',
         agents: [
           { agentId: 'claude', model: 'claude-3-7-sonnet', mode: 'acp' },
           { agentId: 'codex', model: 'gpt-6.1-sol', mode: 'acp' }

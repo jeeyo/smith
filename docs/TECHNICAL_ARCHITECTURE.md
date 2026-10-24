@@ -1,6 +1,6 @@
 # Smith Technical Architecture & Contributor Guide
 
-This document details the internal architecture, protocol specifications, data flows, and design decisions of **Smith**—an API-first, cooperative Agentic Development Environment (ADE).
+This document details the internal architecture, protocol specifications, data flows, and design decisions of **Smith**—an API-first, cooperative multi-agent coding environment.
 
 ```mermaid
 flowchart TB
@@ -299,7 +299,7 @@ Located in `src/server/config.ts` and `src/server/routes/system.router.ts`:
 
 Located in `src-tauri/` and `.github/workflows/release.yml`:
 
-Smith ADE is packaged as a high-performance, native desktop application using **Tauri 2.0**:
+Smith is packaged as a high-performance, native desktop application using **Tauri 2.0**:
 
 - **Native Rust Shell**: Uses the operating system's native WebView (WebView2 on Windows, WebKit on macOS/Linux), eliminating Chromium bundle overhead and reducing binary size to ~4 MB.
 - **Embedded Node.js Supervision**: Automatically spawns and monitors the Express backend (`dist-server/index.cjs`) on port 4100 as a supervised background child process with graceful teardown on application exit.

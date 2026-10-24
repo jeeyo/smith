@@ -23,7 +23,7 @@ function copyToArtifact(fileName: string) {
 }
 
 async function run() {
-  console.log('Starting Smith ADE server...');
+  console.log('Starting Smith server...');
   const serverProcess = fork('dist-server/index.cjs', [], {
     env: { ...process.env, PORT: '4100', NODE_ENV: 'production' }
   });
