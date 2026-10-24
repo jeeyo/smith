@@ -19,7 +19,7 @@ cask "smith" do
   depends_on macos: ">= :catalina"
   depends_on formula: [
     "git",
-    "node",
+    "node@22",
     "uv",
   ]
 

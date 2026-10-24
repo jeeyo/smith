@@ -4,7 +4,7 @@
 [![Release](https://github.com/jeeyo/smith/actions/workflows/release.yml/badge.svg)](https://github.com/jeeyo/smith/actions/workflows/release.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-Smith ADE is a high-performance, API-first **Cooperative Agentic Development Environment** packaged as a lightweight, blazing-fast native desktop application using **Tauri 2.0** and as a multi-arch container image with **Docker**. It provides dual-layer persistent memory powered by the official **Vectorize Hindsight** daemon, real-time multi-agent orchestration, interactive human-in-the-loop clarifications, dynamic model discovery, and cost telemetry.
+Smith ADE is a high-performance, API-first **Cooperative Agentic Development Environment** packaged as a lightweight, blazing-fast native desktop application using **Tauri 2.0**. It provides dual-layer persistent memory powered by the official **Vectorize Hindsight** daemon, real-time multi-agent orchestration, interactive human-in-the-loop clarifications, dynamic model discovery, and cost telemetry.
 
 ![Smith ADE Desktop Interface](docs/images/screenshot_left_sidebar_chat_list.png)
 
@@ -13,7 +13,6 @@ Smith ADE is a high-performance, API-first **Cooperative Agentic Development Env
 ## 🌟 Key Features
 
 - 🖥️ **Ultra-Lightweight Tauri 2.0 Desktop App**: Native Rust desktop shell powered by OS WebView2 / WebKit, with native lifecycle management, sidecar server supervision, and ~97% smaller installer size compared to Electron (~4 MB vs ~120 MB).
-- 🐳 **Multi-Arch Docker Container (`amd64` & `arm64`)**: Ready-to-deploy container published to GitHub Container Registry (`ghcr.io/jeeyo/smith`), pre-bundled with **Node.js 22**, **Astral `uv`/`uvx`**, Git, and pre-warmed **Vectorize Hindsight** daemon for instant server deployments.
 - 🗂️ **Collapsible Left Sidebar**: Clean, dedicated chat session management with real-time search, Git worktree branch badges, active session indicators, one-click deletion, and collapsible icon view.
 - ⚙️ **Application-Level Configuration Hub**: In-app configuration dashboard (`SettingsView`) to customize executable paths for **Claude Code**, **Google Antigravity**, **OpenCode**, **Codex**, and **Astral `uv`/`uvx`**, alongside **Vectorize Hindsight** provider selection (`openai`, `anthropic`, `gemini`, `ollama`), masked API keys, and workspace defaults with live on-disk path verification.
 - 🧠 **Embedded Vectorize Hindsight Daemon**: Zero-friction embedded memory engine using `@vectorize-io/hindsight-all` and `uvx hindsight-embed`, providing persistent bank storage, cross-session episodic memory, facts, and anti-patterns.
@@ -46,28 +45,7 @@ This installs `Smith ADE.app` into `/Applications` and creates a `smith` CLI ali
 
 ---
 
-### Option B: Running with Docker (Recommended for Servers & Headless)
-
-Smith ADE is published as a multi-architecture (`linux/amd64` and `linux/arm64`) Docker container with Node.js 22, Astral `uv`/`uvx`, and Vectorize Hindsight pre-installed and ready out of the box:
-
-```bash
-docker run -d \
-  --name smith \
-  -p 4100:4100 \
-  -p 8888:8888 \
-  -e OPENAI_API_KEY="sk-..." \
-  -v smith-data:/root/.smith \
-  ghcr.io/jeeyo/smith:latest
-```
-
-Open your browser to:
-- **Smith Web UI**: `http://localhost:4100`
-- **Interactive OpenAPI Swagger Docs**: `http://localhost:4100/api/docs`
-- **Vectorize Hindsight Daemon**: `http://localhost:8888`
-
----
-
-### Option B: Running Locally or Desktop App
+### Option B: Running Locally from Source
 
 #### Prerequisites
 - [Node.js](https://nodejs.org/) v22+
@@ -118,8 +96,7 @@ The output packages will be located in the `src-tauri/target/release/bundle/` di
 ```mermaid
 flowchart TD
     subgraph HostOptions ["Deployment Runtimes"]
-        Tauri["Tauri 2.0 Desktop App (Win / Mac / Linux)"]
-        Docker["Docker Container (linux/amd64 & linux/arm64)"]
+        Tauri["Tauri 2.0 Native Desktop App (Win / Mac / Linux)"]
     end
 
     subgraph AppHost ["Smith ADE Application Host"]
@@ -152,14 +129,13 @@ For more details, see:
 
 ---
 
-## 🔄 CI / CD & Container Registry
+## 🔄 CI / CD
 
-- **CI (`.github/workflows/ci.yml`)**: Automatically triggers on all pull/merge requests and pushes to `main`. Installs dependencies with `uv`, builds all targets, validates Tauri shell compilation, validates the Docker build, and runs the Vitest test suite.
+- **CI (`.github/workflows/ci.yml`)**: Automatically triggers on all pull/merge requests and pushes to `main`. Installs dependencies with `uv`, builds all targets, validates Tauri shell compilation, and runs the Vitest test suite.
 - **Automated Releases (`.github/workflows/release.yml`)**: Triggers on every semantic tag push matching `vX.X.X` (e.g., `v0.1.0`):
   1. Builds multi-platform Tauri desktop installers (Windows `.exe`/`.msi`, Linux `.AppImage`/`.deb`, macOS `.dmg`).
-  2. Builds and publishes multi-architecture Docker container images (`linux/amd64` and `linux/arm64`) to **GitHub Container Registry (`ghcr.io/jeeyo/smith`)** tagged with the semantic version and `latest`.
-  3. Automatically updates and commits the Homebrew Cask formula `Casks/smith.rb` with the new version and calculated SHA256 checksums.
-  4. Publishes an official GitHub Release with auto-generated release notes and attached desktop binary artifacts.
+  2. Automatically updates and commits the Homebrew Cask formula `Casks/smith.rb` with the new version and calculated SHA256 checksums.
+  3. Publishes an official GitHub Release with auto-generated release notes and attached desktop binary artifacts.
 
 ---
 

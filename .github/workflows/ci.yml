@@ -10,11 +10,14 @@ on:
 
 jobs:
   test:
-    name: Build & Run Tests
+    name: Build, Test & Validate Tauri Shell
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -25,48 +28,19 @@ jobs:
       - name: Setup uv
         uses: astral-sh/setup-uv@v5
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build project
-        run: npm run build
-
-      - name: Run Vitest tests
-        run: npm test
-
-  tauri-validate:
-    name: Validate Tauri Shell (cargo check)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
       - name: Install Linux system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Cargo Check
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project (UI & Server)
+        run: npm run build
+
+      - name: Run Vitest tests
+        run: npm test
+
+      - name: Cargo Check Tauri Desktop Shell
         run: cargo check --manifest-path src-tauri/Cargo.toml
-
-  docker-validate:
-    name: Validate Docker Build (amd64)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image (dry run)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64
-          push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max

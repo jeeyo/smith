@@ -68,36 +68,12 @@ Smith operates directly on your installed command-line agent tools:
 
 ## 3. Quick Start & Launch
 
-### 3.1. Option A: Running via Docker (Recommended for Servers & Headless)
-
-Smith ADE is published as a multi-arch container image (`linux/amd64` and `linux/arm64`) to **GitHub Container Registry (`ghcr.io/jeeyo/smith`)**. The container image comes pre-installed with:
-- **Node.js 22** runtime
-- **Astral `uv` and `uvx`**
-- **Vectorize Hindsight (`hindsight-embed`)** pre-warmed in tool cache
-- **Git** and system SSL certificates
-
-```bash
-docker run -d \
-  --name smith \
-  -p 4100:4100 \
-  -p 8888:8888 \
-  -e OPENAI_API_KEY="sk-..." \
-  -v smith-data:/root/.smith \
-  ghcr.io/jeeyo/smith:latest
-```
-
-Open your browser to `http://localhost:4100` to access the full web cockpit.
-
----
-
-### 3.2. Option B: Running Desktop App or Locally from Source
-
-#### Prerequisites
+### Prerequisites
 1. **Node.js**: v22+ installed.
 2. **Git**: Installed and available on system path (or configured via App Settings).
 3. **Astral `uv`**: Required for embedded Vectorize Hindsight daemon (`uvx hindsight-embed`).
 
-#### Starting the Server
+### Starting Smith
 ```bash
 # Clone or navigate to the workspace
 cd johnson
@@ -118,7 +94,7 @@ Open your browser or Tauri desktop app to:
 
 ---
 
-### 3.3. Creating a New Session
+### 3.1. Creating a New Session
 
 Click the **`+ New Session`** button in the top navigation bar or the **`+ New Chat`** button in the left sidebar to open the **New Session** dialog:
 

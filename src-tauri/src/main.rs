@@ -135,6 +135,8 @@ fn find_node_executable() -> PathBuf {
     ];
     #[cfg(not(windows))]
     let standard_paths = [
+        "/opt/homebrew/opt/node@22/bin/node",
+        "/usr/local/opt/node@22/bin/node",
         "/opt/homebrew/bin/node",
         "/usr/local/bin/node",
         "/usr/bin/node",
@@ -200,6 +202,12 @@ fn spawn_backend_server() -> Option<Child> {
             }
             #[cfg(target_os = "macos")]
             {
+                if PathBuf::from("/opt/homebrew/opt/node@22/bin").exists() {
+                    extra_paths.push("/opt/homebrew/opt/node@22/bin".to_string());
+                }
+                if PathBuf::from("/usr/local/opt/node@22/bin").exists() {
+                    extra_paths.push("/usr/local/opt/node@22/bin".to_string());
+                }
                 if PathBuf::from("/opt/homebrew/bin").exists() && !current_path.contains("/opt/homebrew/bin") {
                     extra_paths.push("/opt/homebrew/bin".to_string());
                 }
