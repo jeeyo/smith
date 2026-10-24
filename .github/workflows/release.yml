@@ -155,9 +155,11 @@ jobs:
           fi
 
           if [ -n "$ARM64_SHA" ]; then
-            node scripts/update-cask.js "$VERSION" "$ARM64_SHA" "$X64_SHA"
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
+            git fetch origin main
+            git checkout -B main origin/main
+            node scripts/update-cask.js "$VERSION" "$ARM64_SHA" "$X64_SHA"
             git add Casks/smith.rb
             git commit -m "chore(homebrew): update cask formula for v${VERSION}" || true
             git push origin main || true
