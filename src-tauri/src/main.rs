@@ -99,8 +99,11 @@ fn locate_server_and_dist() -> (Option<PathBuf>, Option<PathBuf>) {
             if let Some(contents_dir) = exe_dir.parent() {
                 server_candidates.push(contents_dir.join("Resources").join("dist-server").join("index.cjs"));
                 server_candidates.push(contents_dir.join("Resources").join("resources").join("dist-server").join("index.cjs"));
+                // Tauri places resources declared as "../dist-server/**/*" under Resources/_up_/
+                server_candidates.push(contents_dir.join("Resources").join("_up_").join("dist-server").join("index.cjs"));
                 dist_candidates.push(contents_dir.join("Resources").join("dist"));
                 dist_candidates.push(contents_dir.join("Resources").join("resources").join("dist"));
+                dist_candidates.push(contents_dir.join("Resources").join("_up_").join("dist"));
             }
 
             // Check parent levels (e.g. target/release/smith.exe -> 3 levels up is project root)

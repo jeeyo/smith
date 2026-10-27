@@ -12,7 +12,7 @@
   "scripts": {
     "dev": "vite",
     "build:ui": "vite build",
-    "build:server": "esbuild src/server/index.ts --bundle --platform=node --target=node22 --outfile=dist-server/index.cjs --external:fsevents --external:@vectorize-io/hindsight-all --external:@vectorize-io/hindsight-client",
+    "build:server": "esbuild src/server/index.ts --bundle --platform=node --target=node22 --outfile=dist-server/index.cjs --external:fsevents",
     "build": "tsc && npm run build:ui && npm run build:server",
     "preview": "vite preview",
     "server": "tsx watch src/server/index.ts",
