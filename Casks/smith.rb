@@ -27,9 +27,10 @@ cask "smith" do
 
   # Smith is not yet signed/notarized with an Apple Developer ID, so Gatekeeper
   # reports the quarantined download as "damaged". Clear the quarantine flag.
-  postflight do
-    system_command "/usr/bin/xattr",
-                   args: ["-cr", "#{appdir}/Smith.app"]
+  postflight_steps do
+    run "/usr/bin/xattr",
+        args:           ["-cr", "{{appdir}}/Smith.app"],
+        writable_paths: "{{appdir}}/Smith.app"
   end
 
   zap trash: [
