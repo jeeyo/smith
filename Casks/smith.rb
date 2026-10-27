@@ -25,6 +25,13 @@ cask "smith" do
   app "Smith.app"
   binary "#{appdir}/Smith.app/Contents/MacOS/Smith", target: "smith"
 
+  # Smith is not yet signed/notarized with an Apple Developer ID, so Gatekeeper
+  # reports the quarantined download as "damaged". Clear the quarantine flag.
+  postflight do
+    system_command "/usr/bin/xattr",
+                   args: ["-cr", "#{appdir}/Smith.app"]
+  end
+
   zap trash: [
     "~/.smith",
     "~/Library/Application Support/com.jeeyo.smith",
