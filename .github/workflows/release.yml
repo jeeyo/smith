@@ -1,0 +1,177 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build:
+    name: Build Packages (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+          - os: ubuntu-latest
+          - os: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run build
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build Tauri desktop app (Windows / Linux)
+        if: matrix.os != 'macos-latest'
+        run: npx tauri build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Tauri desktop app (macOS Universal Targets)
+        if: matrix.os == 'macos-latest'
+        run: |
+          npx tauri build --target aarch64-apple-darwin
+          npx tauri build --target x86_64-apple-darwin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Gather release packages
+        shell: bash
+        run: |
+          mkdir -p release-packages
+          # Gather Windows installers and binaries
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            find src-tauri/target/release/bundle -type f \( -name "*.exe" -o -name "*.msi" \) -exec cp {} release-packages/ \;
+          fi
+
+          # Gather Linux AppImage and Deb packages
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            find src-tauri/target/release/bundle -type f \( -name "*.AppImage" -o -name "*.deb" \) -exec cp {} release-packages/ \;
+          fi
+
+          # Gather macOS DMG and tarball bundles
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+            find src-tauri/target/*/release/bundle -type f \( -name "*.dmg" -o -name "*.tar.gz" \) -exec cp {} release-packages/ \;
+            find src-tauri/target/release/bundle -type f \( -name "*.dmg" -o -name "*.tar.gz" \) -exec cp {} release-packages/ \; 2>/dev/null || true
+          fi
+
+          echo "Gathered artifacts in release-packages:"
+          ls -la release-packages/
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-binaries-${{ matrix.os }}
+          path: release-packages/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: extract_version
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Target Release Version: ${VERSION} (from tag: ${TAG})"
+
+      - name: Download all built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: tauri-binaries-*
+          path: release-packages
+          merge-multiple: true
+
+      - name: Inspect release packages
+        run: ls -la release-packages
+
+      - name: Generate Checksums
+        run: |
+          cd release-packages
+          sha256sum * > checksums.txt || true
+          cat checksums.txt
+          cd ..
+
+      - name: Update Homebrew Cask Formula
+        run: |
+          VERSION="${{ steps.extract_version.outputs.version }}"
+          ARM64_DMG=$(find release-packages -name "*aarch64*.dmg" -o -name "*arm64*.dmg" | head -n 1)
+          X64_DMG=$(find release-packages -name "*x64*.dmg" -o -name "*x86_64*.dmg" | head -n 1)
+
+          ARM64_SHA=""
+          if [ -n "$ARM64_DMG" ] && [ -f "$ARM64_DMG" ]; then
+            ARM64_SHA=$(sha256sum "$ARM64_DMG" | awk '{print $1}')
+          fi
+
+          X64_SHA=""
+          if [ -n "$X64_DMG" ] && [ -f "$X64_DMG" ]; then
+            X64_SHA=$(sha256sum "$X64_DMG" | awk '{print $1}')
+          fi
+
+          if [ -z "$X64_SHA" ]; then
+            X64_SHA="$ARM64_SHA"
+          fi
+          if [ -z "$ARM64_SHA" ]; then
+            ARM64_SHA="$X64_SHA"
+          fi
+
+          if [ -n "$ARM64_SHA" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git fetch origin main
+            git checkout -B main origin/main
+            node scripts/update-cask.js "$VERSION" "$ARM64_SHA" "$X64_SHA"
+            git add Casks/smith.rb
+            git commit -m "chore(homebrew): update cask formula for v${VERSION}" || true
+            git push origin main || true
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release v${{ steps.extract_version.outputs.version }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            release-packages/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
