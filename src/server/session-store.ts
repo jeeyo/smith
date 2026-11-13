@@ -48,7 +48,8 @@ class SessionStore {
       customizations: {
         plugins: data.customizations?.plugins || [],
         skills: data.customizations?.skills || [],
-        mcpServers: data.customizations?.mcpServers || {}
+        mcpServers: data.customizations?.mcpServers || {},
+        targets: data.customizations?.targets || {}
       },
       createdAt: data.createdAt || Date.now(),
       updatedAt: data.updatedAt || Date.now()

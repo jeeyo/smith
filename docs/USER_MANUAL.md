@@ -168,7 +168,12 @@ Deleting a session removes its worktrees and its board. The session branch stays
 
 - **Agent Binaries:** paths to `claude`, `codex` and `opencode`, with a check that each exists.
 - **App & Workspace:** Git path, default repository path, server port, display currency.
-- **Customizations** (sliders icon, per session): team conventions ("skills") added to every worker's instructions, and extra MCP servers started for Claude Code and OpenCode workers.
+- **Skills and tools** (sliders icon, per session). Changes apply from each worker's next turn.
+  - **Skills** are conventions added to the worker's instructions.
+  - **MCP servers** are started by the worker's CLI for its turn, for Claude Code, Codex and OpenCode workers alike. A server that needs a value, such as the PostgreSQL connection string or a GitHub token, asks for it and cannot be switched on without it. Secret values are stored with the session on this machine and shown masked. The filesystem server is limited to the directory the worker's turn runs in.
+  - **Plugins** switch on a set of skills and servers together; the servers they bring are marked "On through" the plugin.
+  - Each skill, server or plugin applies to all workers, or to the ones you pick under it.
+  - Skills and servers added through the API (`POST /api/v1/customizations/skills`, `/mcp`) are kept in `~/.smith/catalog.json`.
 
 Settings are stored in `~/.smith/config.json`. Sessions, boards, chats and specs typed in the chat are under `~/.smith/`.
 

@@ -11,6 +11,7 @@ import { sessionChat } from '../session-chat.ts';
 import { scheduler } from '../scheduler.ts';
 import { startGoal, syncPeers } from '../team.ts';
 import { isHarness } from '../adapters/index.ts';
+import { SAFE_ID, maskCustomizations } from '../catalog.ts';
 
 export const sessionsRouter = Router();
 export { getSession };
@@ -45,6 +46,7 @@ function withCost(session: Session) {
   const cost = costEngine.getSessionCost(session.id);
   return {
     ...session,
+    customizations: maskCustomizations(session.customizations),
     cost: {
       currency: 'USD' as const,
       inputCostUsd: 0,
@@ -103,10 +105,12 @@ sessionsRouter.post('/sessions', async (req, res) => {
     customizations: {
       plugins: input.plugins || [],
       skills: input.skills || [],
-      mcpServers: (input.customMcpServers || []).reduce((acc, s) => {
-        acc[s.id] = s;
-        return acc;
-      }, {} as Session['customizations']['mcpServers'])
+      mcpServers: (input.customMcpServers || [])
+        .filter(s => s && SAFE_ID.test(String(s.id)) && s.command)
+        .reduce((acc, s) => {
+          acc[s.id] = { ...s, args: Array.isArray(s.args) ? s.args.map(String) : [] };
+          return acc;
+        }, {} as Session['customizations']['mcpServers'])
     },
     createdAt: Date.now(),
     updatedAt: Date.now()

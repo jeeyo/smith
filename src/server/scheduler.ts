@@ -7,7 +7,7 @@ import { issueTurnToken, onToolCall, revokeTurnToken } from './mcp-server.ts';
 import { getAgentAdapter, TurnRequest, TurnResult } from './adapters/index.ts';
 import { agentHealthEngine } from './agent-health.ts';
 import { costEngine } from './cost-engine.ts';
-import { globalSkills } from './catalog.ts';
+import { resolveFor } from './catalog.ts';
 import { config } from './config.ts';
 import { Card, Peer, PeerId, TurnRecord } from '../shared/board.ts';
 import { Session } from '../shared/types.ts';
@@ -263,9 +263,8 @@ export class Scheduler extends EventEmitter {
       model: peer.model,
       mcp: { url: this.mcpUrl, token },
       timeoutMs: board.data.limits.turnTimeoutMs,
-      extraMcpServers: Object.values(session.customizations?.mcpServers || {})
-        .filter(s => s.enabled)
-        .map(s => ({ id: s.id, command: s.command, args: s.args || [], env: s.env }))
+      // Skills and servers are resolved per worker: targets, plugins and ${WORKDIR} differ.
+      extraMcpServers: resolveFor(session.customizations, peer.id, cwd).mcpServers
     };
 
     Promise.resolve()
@@ -383,10 +382,7 @@ export function buildTurnPrompt(session: Session, board: Board, peer: Peer, reas
     why = `There is work you may take. Suggested: ${cardId}${others.length > 0 ? ` (you could also take ${others.join(', ')})` : ''}. Claim one card with card_claim, do it, and submit it.`;
   }
 
-  const skills = (session.customizations?.skills || [])
-    .map(id => globalSkills.get(id))
-    .filter((s): s is NonNullable<typeof s> => !!s && s.enabled)
-    .map(s => `- ${s.name}: ${s.instructions}`);
+  const skills = resolveFor(session.customizations, peer.id, session.worktree.path).skills.map(s => `- ${s.name}: ${s.instructions}`);
 
   return [
     `You are @${peer.id}, one of the peers working as a team on a shared goal. Nobody is in charge. The team coordinates only through the board, which you reach with the "board" MCP tools (board_read, card_claim, card_submit and the rest; your client may show them with a prefix such as mcp__board__).`,

@@ -100,6 +100,12 @@ All CLIs are spawned with real argument arrays and no shell (`process-utils.ts`)
 
 `handleUserInput` routes chat input: start a goal (first message, or after a completed goal), resume, answer the one waiting card (or the card named by an id prefix), or add a card. `startGoal` resolves the spec, parses its task list and seeds the board. `startTeamAnnouncements` turns board events into chat messages: questions, pauses, removals and rejoins, verification results and completion with a diff summary.
 
+## 6a. Skills, MCP servers and plugins (`catalog.ts`)
+
+The catalog holds the built-in entries plus any added through the API (saved in `catalog.json`). A session stores which skills, servers and plugins are on, input values for servers, and optional per-worker targets keyed `skill:<id>`, `mcp:<id>` or `plugin:<id>`.
+
+`resolveFor(customizations, peerId, workdir)` works out what one worker gets on one turn: the session's own skills and servers plus those its plugins bring, limited to the ones targeting that worker, with `${WORKDIR}` and `${KEY}` placeholders filled in. A server still missing an input is left out; the API refuses to save such a state in the first place. The scheduler calls it for every turn, and each adapter attaches the resulting servers in its CLI's own way (an MCP config file, Codex `-c` overrides, OpenCode inline config). Secret input values are masked in every API response, and a mask sent back unchanged keeps the stored value.
+
 ## 7. Git (`worktree-manager.ts`)
 
 All Git commands run through `execFile` with argument arrays; branch names are validated. Mutating commands run only in a directory that is the root of its own worktree (`isWorktreeRoot`), so a fallback folder inside the user's repository can never cause a commit, reset or clean on that repository.

@@ -359,18 +359,24 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleApplyCustomizations = async (updated: any) => {
-    if (!currentSession) return;
+  /** Saves the session's skills and tools; returns the server's complaint, if any. */
+  const handleApplyCustomizations = async (updated: any): Promise<string | null> => {
+    if (!currentSession) return 'No session selected.';
+    const sessionId = currentSession.id;
     try {
-      const res = await fetch(`/api/v1/sessions/${currentSession.id}/customizations`, {
+      const res = await fetch(`/api/v1/sessions/${sessionId}/customizations`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated)
       });
       const data = await res.json();
-      setCurrentSession(prev => prev ? ({ ...prev, customizations: data.customizations }) : prev);
-    } catch (err) {
-      console.error(err);
+      if (!res.ok) return data.error || 'Could not save.';
+      const apply = (s: Session) => (s.id === sessionId ? { ...s, customizations: data.customizations } : s);
+      setCurrentSession(prev => (prev ? apply(prev) : prev));
+      setSessions(prev => prev.map(apply));
+      return null;
+    } catch (err: any) {
+      return err?.message || 'Could not reach the server.';
     }
   };
 
@@ -523,6 +529,7 @@ export const App: React.FC = () => {
           isOpen={isCustomizationsOpen}
           onClose={() => setIsCustomizationsOpen(false)}
           customizations={currentSession.customizations}
+          workers={currentSession.agents}
           allSkills={allSkills}
           allMCPs={allMCPs}
           allPlugins={allPlugins}

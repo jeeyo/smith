@@ -67,14 +67,29 @@ export interface SessionCostSummary {
   }>;
 }
 
+/** A value a server needs before it can start, such as a token or a connection string. */
+export interface MCPInput {
+  /** Referenced as ${KEY} in the server's args or env. */
+  key: string;
+  label: string;
+  secret?: boolean;
+  placeholder?: string;
+}
+
 export interface CustomMCPServer {
+  /** Letters, digits, "-" and "_" only: it becomes a config key in every CLI. */
   id: string;
   name: string;
   command: string;
+  /** May contain ${WORKDIR} (the directory the worker's turn runs in) and ${KEY} for each input. */
   args: string[];
   env?: Record<string, string>;
+  /** In the catalog: unused. In a session: whether the server is switched on. */
   enabled: boolean;
   description?: string;
+  inputs?: MCPInput[];
+  /** Values for the inputs, stored with the session. */
+  values?: Record<string, string>;
 }
 
 export interface Skill {
@@ -86,6 +101,7 @@ export interface Skill {
   enabled: boolean;
 }
 
+/** A bundle that switches on a set of skills and servers together. */
 export interface Plugin {
   id: string;
   name: string;
@@ -99,6 +115,11 @@ export interface SessionCustomizations {
   plugins: string[];
   skills: string[];
   mcpServers: Record<string, CustomMCPServer>;
+  /**
+   * Which workers each skill, server or plugin applies to, keyed "skill:<id>", "mcp:<id>" or
+   * "plugin:<id>". A missing or empty list means every worker.
+   */
+  targets?: Record<string, string[]>;
 }
 
 export interface WorktreeInfo {

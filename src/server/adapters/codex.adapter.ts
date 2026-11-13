@@ -35,6 +35,7 @@ export class CodexAdapter implements AgentAdapter {
       '-m', request.model,
       '-c', `mcp_servers.board.url=${JSON.stringify(request.mcp.url)}`,
       '-c', 'mcp_servers.board.bearer_token_env_var="SMITH_BOARD_TOKEN"',
+      ...extraServerOverrides(request.extraMcpServers || []),
       request.prompt
     ];
     const res = await runCli(this.getBinaryPath(), args, {
@@ -44,6 +45,25 @@ export class CodexAdapter implements AgentAdapter {
     });
     return plainResult('Codex', res);
   }
+}
+
+/**
+ * Codex reads MCP servers from config.toml; `-c key=value` overrides take TOML values. JSON
+ * strings and string arrays are valid TOML, and an inline table carries the environment.
+ * Values passed this way are visible in the process list, like the rest of the arguments.
+ */
+export function extraServerOverrides(servers: Array<{ id: string; command: string; args: string[]; env?: Record<string, string> }>): string[] {
+  const out: string[] = [];
+  for (const s of servers) {
+    if (s.id === 'board' || !/^[A-Za-z0-9_-]+$/.test(s.id)) continue;
+    out.push('-c', `mcp_servers.${s.id}.command=${JSON.stringify(s.command)}`);
+    out.push('-c', `mcp_servers.${s.id}.args=${JSON.stringify(s.args || [])}`);
+    if (s.env && Object.keys(s.env).length > 0) {
+      const table = Object.entries(s.env).map(([k, v]) => `${JSON.stringify(k)}=${JSON.stringify(v)}`).join(',');
+      out.push('-c', `mcp_servers.${s.id}.env={${table}}`);
+    }
+  }
+  return out;
 }
 
 export function plainResult(name: string, res: { stdout: string; stderr: string; code: number; timedOut: boolean; spawnError?: string }): TurnResult {
