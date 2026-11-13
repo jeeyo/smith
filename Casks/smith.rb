@@ -1,7 +1,7 @@
 cask "smith" do
   arch arm: "aarch64", intel: "x64"
 
-  version "0.2.1"
+  version "0.3.0"
   sha256 arm:   "59ca104a4268d8b9086ea3cfcbdb2cebde8c06289425f6b4e20a88ee7a0198d7",
          intel: "36c878b02ce944af6f9388c5179e7f67e3082dc6e768451f1a6a4c235e88691c"
 

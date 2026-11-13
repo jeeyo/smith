@@ -12,7 +12,7 @@ import { scheduler } from '../scheduler.ts';
 
 export const systemRouter = Router();
 
-const VERSION = process.env.npm_package_version || '0.2.1';
+const VERSION = process.env.npm_package_version || '0.3.0';
 
 systemRouter.post('/system/pty/create', (req, res) => {
   const { command, cwd } = req.body || {};
