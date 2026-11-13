@@ -81,6 +81,11 @@ export interface CustomMCPServer {
   id: string;
   name: string;
   command: string;
+  transport?: 'stdio' | 'http';
+  url?: string;
+  headers?: Record<string, string>;
+  auth?: 'none' | 'oauth';
+  oauth?: { clientId?: string; clientSecret?: string; scope?: string };
   /** May contain ${WORKDIR} (the directory the worker's turn runs in) and ${KEY} for each input. */
   args: string[];
   env?: Record<string, string>;
@@ -97,6 +102,7 @@ export interface Skill {
   name: string;
   description: string;
   path?: string;
+  source?: string;
   instructions: string;
   enabled: boolean;
 }
@@ -239,4 +245,13 @@ export interface AppLevelConfig {
     budgetAlertThreshold: number;
   };
   detectedBinaries?: Record<string, string>;
+}
+
+export interface SmithChat {
+  id: string;
+  sessionId?: string;
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+  running: boolean;
+  error?: string;
+  actions?: string[];
 }

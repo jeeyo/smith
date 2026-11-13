@@ -167,10 +167,10 @@ describe('session customizations API', () => {
     while (!(seen['claude-1'] && seen['codex-1']) && Date.now() - start < 5000) await new Promise(r => setTimeout(r, 20));
     boardStore.get(id).pause('test finished');
 
-    expect(seen['claude-1'].extraMcpServers!.map(s => s.id)).toEqual(['filesystem']);
-    expect(seen['claude-1'].extraMcpServers![0].args).toContain(seen['claude-1'].cwd);
+    expect(seen['claude-1'].extraMcpServers!.map(s => s.id)).toEqual(['smith', 'filesystem']);
+    expect(seen['claude-1'].extraMcpServers![1].args).toContain(seen['claude-1'].cwd);
     expect(seen['claude-1'].prompt).not.toContain('REST & GraphQL API Design');
-    expect(seen['codex-1'].extraMcpServers).toEqual([]);
+    expect(seen['codex-1'].extraMcpServers!.map(s => s.id)).toEqual(['smith']);
     expect(seen['codex-1'].prompt).toContain('REST & GraphQL API Design');
   });
 });

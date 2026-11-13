@@ -19,6 +19,7 @@ interface TopBarProps {
   onOpenSettings?: () => void;
   /** Opens the sidebar drawer on phones. */
   onOpenNav?: () => void;
+  onAskSmith?: () => void;
 }
 
 const HARNESSES: Array<{ id: string; label: string; login: string }> = [
@@ -37,7 +38,8 @@ export const TopBar: React.FC<TopBarProps> = ({
   isRefreshingModels,
   agentHealth = {},
   onOpenTerminal,
-  onOpenNav
+  onOpenNav,
+  onAskSmith
 }) => (
   <header className="h-14 px-3 md:px-5 pt-[env(safe-area-inset-top)] box-content flex items-center justify-between gap-2 md:gap-4 select-none flex-shrink-0 border-b border-ink-100 bg-ink-0">
     <div className="flex items-center gap-2.5 md:gap-3 min-w-0">
@@ -95,6 +97,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         </button>
       </div>
 
+      {onAskSmith && <button onClick={onAskSmith} className="px-3 py-1.5 rounded-lg bg-lav-100 text-lav-700 text-xs font-medium">Ask Smith</button>}
       {costSummary && <CostWidget costSummary={costSummary} />}
 
       {onOpenTerminal && (

@@ -58,7 +58,7 @@ export const TerminalModal: React.FC<TerminalModalProps> = ({
           setLines(prev => [...prev, `[Smith] Shell ${data.ptyId} attached (${data.command}). This is a plain shell without a TTY: commands that need one, such as some browser logins, are better run in your own terminal.`]);
           if (initialCommand) {
             setTimeout(() => {
-              ws.send(JSON.stringify({ type: 'input', data: `${initialCommand}\r\n` }));
+              ws.send(JSON.stringify({ type: 'input', data: `${initialCommand}\n` }));
             }, 600);
           }
         };
@@ -100,12 +100,12 @@ export const TerminalModal: React.FC<TerminalModalProps> = ({
     if (!wsRef.current || !inputVal.trim()) return;
     const text = inputVal;
     setInputVal('');
-    wsRef.current.send(JSON.stringify({ type: 'input', data: `${text}\r\n` }));
+    wsRef.current.send(JSON.stringify({ type: 'input', data: `${text}\n` }));
   };
 
   const handleQuickCommand = (cmd: string) => {
     if (!wsRef.current) return;
-    wsRef.current.send(JSON.stringify({ type: 'input', data: `${cmd}\r\n` }));
+    wsRef.current.send(JSON.stringify({ type: 'input', data: `${cmd}\n` }));
   };
 
   const handleClose = () => {

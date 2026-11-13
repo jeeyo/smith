@@ -1,5 +1,6 @@
 import { AgentHealthStatus, TokenUsage } from '../../shared/types.ts';
 import { HarnessId } from '../../shared/board.ts';
+import type { ResolvedServer } from '../catalog.ts';
 
 export interface TurnRequest {
   /** Everything the peer is told for this turn. */
@@ -8,10 +9,10 @@ export interface TurnRequest {
   cwd: string;
   model: string;
   /** The board's MCP endpoint and this turn's bearer token. */
-  mcp: { url: string; token: string };
+  mcp: { url: string; token: string; name?: 'board' | 'smith' };
   timeoutMs: number;
   /** Extra MCP servers the session enabled, started by the CLI for this turn. */
-  extraMcpServers?: Array<{ id: string; command: string; args: string[]; env?: Record<string, string> }>;
+  extraMcpServers?: ResolvedServer[];
 }
 
 export interface TurnResult {

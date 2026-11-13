@@ -7,6 +7,7 @@ vi.mock('dompurify', () => ({ default: { sanitize: (html: string) => html } }));
 vi.mock('mermaid', () => ({ default: { initialize: () => {}, render: async () => ({ svg: '' }) } }));
 
 import { BoardView, CardDetail } from '../src/client/components/BoardView.tsx';
+import { MarkdownContent } from '../src/client/components/MarkdownContent.tsx';
 import { GoalChat } from '../src/client/components/GoalChat.tsx';
 import { NewSessionModal, suggestTier } from '../src/client/components/NewSessionModal.tsx';
 import { Board, emptyBoard } from '../src/server/board.ts';
@@ -206,9 +207,9 @@ describe('GoalChat', () => {
 
 describe('NewSessionModal', () => {
   it('renders the form with review modes, and nothing when closed', () => {
-    const open = renderToStaticMarkup(<NewSessionModal isOpen onClose={noop} availableModels={[]} agentHealth={{}} onCreateSession={noop} />);
+    const open = renderToStaticMarkup(<NewSessionModal isOpen onClose={noop} availableModels={[]} agentHealth={{}} onCreateSession={async () => null} />);
     for (const text of ['New session', 'Repository path', 'Workers', 'Fast', 'Normal', 'Thorough', 'Create session']) expect(open).toContain(text);
-    expect(renderToStaticMarkup(<NewSessionModal isOpen={false} onClose={noop} availableModels={[]} onCreateSession={noop} />)).toBe('');
+    expect(renderToStaticMarkup(<NewSessionModal isOpen={false} onClose={noop} availableModels={[]} onCreateSession={async () => null} />)).toBe('');
   });
 
   it('suggests the same tier in the form as the server assigns', () => {
@@ -218,5 +219,17 @@ describe('NewSessionModal', () => {
     expect(suggestTier('claude-opus-5-5')).toBe(3);
     expect(suggestTier('claude-haiku-5-5')).toBe(1);
     expect(suggestTier('claude-sonnet-5-5')).toBe(2);
+  });
+});
+
+describe('Markdown content', () => {
+  it('renders headings, lists, reference links, tables and fenced code together', () => {
+    const content = '# Review\n\n- **One**\n- [Docs][ref]\n\n| Check | Result |\n| --- | --- |\n| Errors | Passed |\n\n```ts\nconst value = "<safe>";\n```\n\n[ref]: https://example.com/docs';
+    const html = renderToStaticMarkup(<MarkdownContent content={content}/>);
+    for (const fragment of ['<h1>Review</h1>', '<strong>One</strong>', '<table>', 'href="https://example.com/docs"', 'language-ts', '&lt;safe&gt;']) expect(html).toContain(fragment);
+  });
+  it('does not turn a Mermaid example nested in another code fence into a diagram', () => {
+    const html = renderToStaticMarkup(<MarkdownContent content={'````markdown\n```mermaid\ngraph TD; A-->B;\n```\n````'}/>);
+    expect(html).toContain('language-markdown'); expect(html).not.toContain('Mermaid Diagram');
   });
 });

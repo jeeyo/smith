@@ -11,7 +11,8 @@ import { sessionChat } from '../session-chat.ts';
 import { scheduler } from '../scheduler.ts';
 import { startGoal, syncPeers } from '../team.ts';
 import { isHarness } from '../adapters/index.ts';
-import { SAFE_ID, maskCustomizations } from '../catalog.ts';
+import { SAFE_ID, maskCustomizations, serverDefinition, customizationProblems } from '../catalog.ts';
+import { listBranches, localPath } from '../workspace.ts';
 
 export const sessionsRouter = Router();
 export { getSession };
@@ -27,11 +28,11 @@ export function suggestTier(model: string): Tier {
 }
 
 /** Builds the worker map, giving each worker a unique peer id such as "claude-1". */
-function buildWorkers(agents: SessionAgentConfig[] | undefined): Session['agents'] {
+export function buildWorkers(agents: SessionAgentConfig[] | undefined): Session['agents'] {
   const workers: Session['agents'] = {};
   const counts: Record<string, number> = {};
   for (const cfg of agents || []) {
-    if (!cfg || !isHarness(cfg.agentId) || !cfg.model) continue;
+    if (!cfg || !isHarness(cfg.agentId) || typeof cfg.model !== 'string' || !cfg.model.trim()) continue;
     counts[cfg.agentId] = (counts[cfg.agentId] || 0) + 1;
     let id = (cfg.workerId || '').trim().replace(/[^a-zA-Z0-9_-]/g, '-');
     if (!id || workers[id]) id = `${cfg.agentId}-${counts[cfg.agentId]}`;
@@ -42,7 +43,7 @@ function buildWorkers(agents: SessionAgentConfig[] | undefined): Session['agents
   return workers;
 }
 
-function withCost(session: Session) {
+export function withCost(session: Session) {
   const cost = costEngine.getSessionCost(session.id);
   return {
     ...session,
@@ -58,7 +59,7 @@ function withCost(session: Session) {
   };
 }
 
-async function removeSession(session: Session) {
+export async function removeSession(session: Session) {
   try {
     await boardTools.dropAllWorkspaces(session);
   } catch {}
@@ -76,23 +77,28 @@ sessionsRouter.get('/sessions', (_req, res) => {
   res.json({ count: list.length, sessions: list });
 });
 
-sessionsRouter.post('/sessions', async (req, res) => {
-  const input: SessionCreateInput = req.body || {};
-  if (!input.name || !input.repoPath) {
-    return res.status(400).json({ error: 'name and repoPath are required' });
+export async function createSession(input: SessionCreateInput): Promise<Session> {
+  if (typeof input?.name !== 'string' || !input.name.trim() || typeof input.repoPath !== 'string' || !input.repoPath.trim()) {
+    throw new Error('name and repoPath are required');
   }
+  input = { ...input, name: input.name.trim(), repoPath: localPath(input.repoPath.trim()) };
+  const branches = await listBranches(input.repoPath);
+  const baseBranch = input.baseBranch || branches.defaultBranch;
+  if (!baseBranch) throw new Error('The repository needs at least one committed branch.');
 
   const sessionId = `smith-${Date.now()}-${uuidv4().substring(0, 6)}`;
   const slug = input.name.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'session';
   // The id suffix keeps two sessions with the same name on separate branches.
   const branchName = `smith/${slug}-${sessionId.slice(-6)}`;
 
-  let worktree;
-  try {
-    worktree = await worktreeManager.createWorktree(input.repoPath, branchName, input.baseBranch || 'main');
-  } catch (err: any) {
-    return res.status(400).json({ error: err.message });
-  }
+  const agents = buildWorkers(input.agents);
+  const customizations: Session['customizations'] = {
+    plugins: input.plugins || [], skills: input.skills || [],
+    mcpServers: Object.fromEntries((input.customMcpServers || []).map(s => { const definition = serverDefinition(s); return [definition.id, definition]; }))
+  };
+  const problems = customizationProblems(customizations);
+  if (problems.length) throw new Error(problems.join(' '));
+  const worktree = await worktreeManager.createWorktree(input.repoPath, branchName, baseBranch);
 
   const session: Session = {
     id: sessionId,
@@ -100,18 +106,9 @@ sessionsRouter.post('/sessions', async (req, res) => {
     repoPath: input.repoPath,
     macroGoal: '',
     worktree,
-    agents: buildWorkers(input.agents),
+    agents,
     reviewMode: REVIEW_MODES.includes(input.reviewMode as ReviewMode) ? (input.reviewMode as ReviewMode) : 'normal',
-    customizations: {
-      plugins: input.plugins || [],
-      skills: input.skills || [],
-      mcpServers: (input.customMcpServers || [])
-        .filter(s => s && SAFE_ID.test(String(s.id)) && s.command)
-        .reduce((acc, s) => {
-          acc[s.id] = { ...s, args: Array.isArray(s.args) ? s.args.map(String) : [] };
-          return acc;
-        }, {} as Session['customizations']['mcpServers'])
-    },
+    customizations,
     createdAt: Date.now(),
     updatedAt: Date.now()
   };
@@ -124,7 +121,12 @@ sessionsRouter.post('/sessions', async (req, res) => {
     startGoal(session, input.macroGoal);
   }
 
-  res.status(201).json(withCost(session));
+  return session;
+}
+
+sessionsRouter.post('/sessions', async (req, res) => {
+  try { res.status(201).json(withCost(await createSession(req.body))); }
+  catch (err: any) { res.status(400).json({ error: err.message }); }
 });
 
 sessionsRouter.get('/sessions/:id', (req, res) => {

@@ -9,8 +9,21 @@ import { ptyManager } from '../pty-manager.ts';
 import { findOnPath } from '../process-utils.ts';
 import { HARNESSES } from '../adapters/index.ts';
 import { scheduler } from '../scheduler.ts';
+import { listBranches, listFolders } from '../workspace.ts';
 
 export const systemRouter = Router();
+
+systemRouter.get('/system/folders', (req, res) => {
+  try { res.json(listFolders(typeof req.query.path === 'string' ? req.query.path : undefined, req.query.hidden === 'true')); }
+  catch (err: any) { res.status(400).json({ error: `Could not open folder: ${err.message}` }); }
+});
+
+systemRouter.get('/system/branches', async (req, res) => {
+  try {
+    if (typeof req.query.path !== 'string' || !req.query.path.trim()) return res.status(400).json({ error: 'Repository path is required.' });
+    res.json(await listBranches(req.query.path));
+  } catch (err: any) { res.status(400).json({ error: err.message }); }
+});
 
 const VERSION = process.env.npm_package_version || '0.3.0';
 

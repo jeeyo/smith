@@ -4,6 +4,7 @@ import { Board, WakeReason } from './board.ts';
 import { boardStore } from './board-store.ts';
 import { sessionStore } from './session-store.ts';
 import { issueTurnToken, onToolCall, revokeTurnToken } from './mcp-server.ts';
+import { workerServers } from './mcp-connections.ts';
 import { getAgentAdapter, TurnRequest, TurnResult } from './adapters/index.ts';
 import { agentHealthEngine } from './agent-health.ts';
 import { costEngine } from './cost-engine.ts';
@@ -48,7 +49,7 @@ export class Scheduler extends EventEmitter {
   turnRunner: TurnRunner = (peer, request) => getAgentAdapter(peer.harness).runTurn(request);
 
   /** Where turns reach the board. Set once the HTTP server is listening. */
-  mcpUrl = `http://127.0.0.1:${config.port}/mcp`;
+  mcpUrl = `http://127.0.0.1:${config.port}/mcp/board`;
 
   private wired = false;
 
@@ -264,7 +265,7 @@ export class Scheduler extends EventEmitter {
       mcp: { url: this.mcpUrl, token },
       timeoutMs: board.data.limits.turnTimeoutMs,
       // Skills and servers are resolved per worker: targets, plugins and ${WORKDIR} differ.
-      extraMcpServers: resolveFor(session.customizations, peer.id, cwd).mcpServers
+      extraMcpServers: workerServers(session.id, resolveFor(session.customizations, peer.id, cwd).mcpServers)
     };
 
     Promise.resolve()
@@ -309,6 +310,22 @@ export class Scheduler extends EventEmitter {
       });
     } else if (!result.ok) {
       board.turnFailed(peer.id, result.error || 'The turn failed');
+      if (turn.toolCalls === 0) {
+        // A rejected CLI invocation cannot fail a card it never claimed. Without a health
+        // gate it is immediately rescheduled until the entire goal budget is exhausted.
+        const current = agentHealthEngine.get(peer.harness);
+        agentHealthEngine.setStatus(peer.harness, {
+          agentId: peer.harness,
+          name: current?.name || peer.harness,
+          installed: current?.installed ?? true,
+          authenticated: current?.authenticated ?? false,
+          binaryPath: current?.binaryPath,
+          status: 'error',
+          message: `${current?.name || peer.harness} failed before reaching the board: ${(result.error || 'no details').slice(0, 300)}`,
+          remediation: 'Check the CLI configuration and error, then re-check the agent CLIs.',
+          lastCheckedAt: Date.now()
+        });
+      }
     } else if (turn.toolCalls === 0) {
       // A turn that never touched the board changed nothing the team can see. Repeated, it
       // usually means the board tools are not reaching this harness.
@@ -382,7 +399,7 @@ export function buildTurnPrompt(session: Session, board: Board, peer: Peer, reas
     why = `There is work you may take. Suggested: ${cardId}${others.length > 0 ? ` (you could also take ${others.join(', ')})` : ''}. Claim one card with card_claim, do it, and submit it.`;
   }
 
-  const skills = resolveFor(session.customizations, peer.id, session.worktree.path).skills.map(s => `- ${s.name}: ${s.instructions}`);
+  const skills = resolveFor(session.customizations, peer.id, session.worktree.path).skills.map(s => `- ${s.name}${s.path ? ` (package: ${s.path}/SKILL.md; resolve scripts, references and assets relative to ${s.path})` : ''}: ${s.instructions}`);
 
   return [
     `You are @${peer.id}, one of the peers working as a team on a shared goal. Nobody is in charge. The team coordinates only through the board, which you reach with the "board" MCP tools (board_read, card_claim, card_submit and the rest; your client may show them with a prefix such as mcp__board__).`,

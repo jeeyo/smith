@@ -83,6 +83,25 @@ describe('CLI spawning', () => {
 });
 
 describe('PTY manager', () => {
+  it('runs CRLF-terminated commands without adding a carriage return to their arguments', async () => {
+    const id = 'pty-command-lines';
+    let output = '';
+    const onData = (event: { ptyId: string; data: string }) => {
+      if (event.ptyId === id) output += event.data;
+    };
+    ptyManager.on('pty:data', onData);
+    const session = ptyManager.createPTY(id, 'test', scratch, '/bin/sh');
+    try {
+      const closed = new Promise<void>(resolve => session.process.once('close', () => resolve()));
+      ptyManager.writePTY(id, "printf '<%s>' first\r\nprintf '<%s>' second\nexit\r\n");
+      await closed;
+      expect(output).toBe('<first><second>');
+    } finally {
+      ptyManager.off('pty:data', onData);
+      ptyManager.terminatePTY(id);
+    }
+  });
+
   it('survives a shell that cannot be spawned', async () => {
     const exited = new Promise<void>(resolve => ptyManager.once('pty:exit', () => resolve()));
     ptyManager.createPTY('pty-missing', 'test', scratch, path.join(scratch, 'no-such-shell'));
@@ -142,6 +161,25 @@ describe('Worktree manager safety', () => {
 
     expect(fs.existsSync(marker)).toBe(false);
     expect(git(info.path, 'log', '-1', '--format=%s').trim()).toBe(message);
+  });
+
+  it('reports a failed git worktree creation instead of returning a scratch directory', async () => {
+    const repo = makeRepo('busy-branch');
+    git(repo, 'checkout', '-b', 'smith/busy');
+    await expect(worktreeManager.createWorktree(repo, 'smith/busy', 'main')).rejects.toThrow(/Could not create the Git worktree/);
+    expect(fs.existsSync(path.join(repo, '.worktrees', 'smith-busy'))).toBe(false);
+    expect(git(repo, 'branch', '--show-current').trim()).toBe('smith/busy');
+  });
+
+  it('reuses a real session worktree and its existing branch', async () => {
+    const repo = makeRepo('reuse');
+    const first = await worktreeManager.createWorktree(repo, 'smith/reuse', 'main');
+    const second = await worktreeManager.createWorktree(repo, 'smith/reuse', 'main');
+    expect(second.path).toBe(first.path);
+    await worktreeManager.removeWorktree(repo, first.path);
+    const recreated = await worktreeManager.createWorktree(repo, 'smith/reuse', 'main');
+    expect(await worktreeManager.isWorktreeRoot(recreated.path)).toBe(true);
+    expect(git(recreated.path, 'branch', '--show-current').trim()).toBe('smith/reuse');
   });
 
   it('reports a conflicting merge as a failure and leaves the repo clean', async () => {
@@ -208,6 +246,33 @@ describe('Worktree file endpoint', () => {
       .post('/api/v1/sessions')
       .send({ name: 'Bad Base', repoPath: makeRepo('badbase'), baseBranch: 'main; touch /tmp/x' });
     expect(res.status).toBe(400);
+  });
+
+  it('rejects a missing base branch without saving a broken session', async () => {
+    const repo = makeRepo('missing-base');
+    const before = await request(app).get('/api/v1/sessions');
+    const res = await request(app).post('/api/v1/sessions')
+      .send({ name: 'Missing Base', repoPath: repo, baseBranch: 'does-not-exist' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('Base branch "does-not-exist" was not found');
+    expect(fs.existsSync(path.join(repo, '.worktrees'))).toBe(false);
+    const after = await request(app).get('/api/v1/sessions');
+    expect(after.body.count).toBe(before.body.count);
+  });
+
+  it('rejects missing paths and plain directories without creating a repository or overwriting files', async () => {
+    const missing = path.join(scratch, 'missing-repo');
+    const plain = path.join(scratch, 'plain-dir');
+    fs.mkdirSync(plain);
+    fs.writeFileSync(path.join(plain, '.gitignore'), 'keep-my-rules\n');
+    for (const repoPath of [missing, plain]) {
+      const res = await request(app).post('/api/v1/sessions').send({ name: 'Bad Path', repoPath });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('root of an existing Git repository');
+      expect(fs.existsSync(path.join(repoPath, '.git'))).toBe(false);
+    }
+    expect(fs.existsSync(missing)).toBe(false);
+    expect(fs.readFileSync(path.join(plain, '.gitignore'), 'utf-8')).toBe('keep-my-rules\n');
   });
 });
 

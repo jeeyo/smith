@@ -11,7 +11,7 @@ flowchart TB
     end
     subgraph Server ["src/server (Express, ws)"]
         Routes["routes/*: sessions, goal, board, worktree, system, cost, customizations"]
-        MCP["mcp-server.ts: /mcp, JSON-RPC, per-turn tokens"]
+        MCP["mcp-server.ts: /mcp/board, JSON-RPC, per-turn tokens"]
         Tools["board-tools.ts: tool definitions and git side effects"]
         Board["board.ts: cards and referee rules (no I/O)"]
         Store["board-store.ts, session-store.ts, session-chat.ts: persistence"]
@@ -67,7 +67,7 @@ Everything is under the storage directory (`~/.smith`, or `SMITH_STORAGE_DIR`; t
 - **submit:** commits everything in the card worktree, computes the diff against the session branch, refuses changes to the spec file, and passes the diff to `Board.submit`, which checks the scope and decides whether a review is needed.
 - **merge:** serialised per session. A clean merge marks the card done and removes its worktree. A conflict is aborted and becomes a merge-conflict card.
 
-`mcp-server.ts` serves the tools at `POST /mcp` as JSON-RPC 2.0 with one JSON response per request (`initialize`, `tools/list`, `tools/call`, `ping`). Every agent turn gets its own bearer token mapped to one peer in one session; the token is revoked when the turn ends.
+`mcp-server.ts` serves the tools at `POST /mcp/board` as JSON-RPC 2.0 with one JSON response per request (`initialize`, `tools/list`, `tools/call`, `ping`). Every agent turn gets its own bearer token mapped to one peer in one session; the token is revoked when the turn ends.
 
 If the session directory is not a real Git worktree (worktree creation failed and Smith fell back to a plain folder), cards are worked in that folder and scope checks and merges are skipped.
 
@@ -112,7 +112,7 @@ All Git commands run through `execFile` with argument arrays; branch names are v
 
 ## 8. HTTP, WebSocket and security (`index.ts`)
 
-- REST under `/api/v1` (see `/api/docs`), the board for agents under `/mcp`, the built UI as static files.
+- REST under `/api/v1` (see `/api/docs`), the board for agents under `/mcp/board`, public management under `/mcp`, the built UI as static files.
 - WebSocket events: `board:updated`, `chat:message`, `turn:started`, `turn:ended`, `cost:updated`; terminal streams under `/ws/pty/<id>`.
 - The server binds to `127.0.0.1`. Requests and WebSocket connections carrying a browser `Origin` are accepted only from loopback or Tauri origins. Requests without an `Origin` (the desktop shell, agent CLIs, tests) are allowed.
 - Files served from a session workspace are path-checked against the real worktree and repository paths and sent with a sandboxing Content-Security-Policy.
@@ -138,3 +138,18 @@ The Rust shell starts `dist-server/index.cjs` with the system Node, waits for `/
 - `tests/system-config.test.ts`, `tests/cost-engine.test.ts`, `tests/model-discovery.test.ts`.
 
 Port binding is required, so the suite does not run inside a sandbox that blocks local listeners.
+
+
+## Management, integrations and setup chat
+
+`smith-tools.ts` defines management tools with Zod argument schemas. `smith-mcp.ts` serves them using the MCP SDK’s stateless Streamable HTTP transport, with one Server/transport per POST and JSON responses. There is no authentication or MCP session state; GET/DELETE return 405, accepted notifications return 202. It shares the loopback/origin boundary with the REST API. Tool execution calls the same REST services as the UI; mutation events refresh connected UIs. Board turns retain their own authenticated endpoint at `/mcp/board`.
+
+`smith-assistant.ts` runs a selected harness with Smith management MCP attached. Conversations and running/error state persist in `assistant/<uuid>.json`. POST `/api/v1/assistant/messages` returns 202 and the client polls `/api/v1/assistant/chats/<uuid>`. A tool-created session becomes the conversation’s default session, including within the same turn. Restarted requests are marked interrupted rather than retried. `SmithAssistant.tsx` presents this as Ask Smith.
+
+`workspace.ts` browses local directories and Git refs without checkout changes. The session form uses it for the folder browser and branch dropdown. `skill-import.ts` stages complete packages from local files or remote repositories/URLs, rejects symlinks and oversize imports, and uses immutable content hashes covering resources as well as SKILL.md. Enabled skill instructions and package paths are included in worker prompts.
+
+`mcp-connections.ts` stores OAuth client registration, discovery state, PKCE verifiers and tokens privately in `mcp-oauth.json`. The SDK handles protected-resource/authorization-server discovery, registration, code exchange and refresh. Random state expires in ten minutes and callbacks are single-use. Servers may also use pre-registered clients. Tokens are keyed by server id and endpoint, never returned by the API, and refreshed through a per-connection lock.
+
+Remote worker MCP configurations point to `/api/v1/sessions/<id>/mcp/<serverId>/proxy`. The broker forwards JSON or SSE responses, protocol/session headers and resolved static headers, adds current OAuth authorization, and retries once after an upstream 401. This gives all three harnesses the same refresh behavior. Stdio definitions retain their native command/args/env format. The scheduler always adds Smith’s own management endpoint, and installed skill resources stay available to active turns across re-imports.
+
+`tests/smith-management.test.ts` exercises an external SDK client without auth, actual Git fixtures, complete skill imports, stdio MCP, OAuth discovery/registration/PKCE/refresh, broker tool calls, callback replay, credential masking and the setup conversation. The OAuth provider is a local controlled fixture, not a certification against every vendor.

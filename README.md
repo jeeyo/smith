@@ -30,6 +30,10 @@ Smith is a desktop app in which a team of coding agents works on your goal toget
 - **Review modes.** Fast (no card reviews), Normal (larger or riskier cards) or Thorough (every card). The finished goal is always verified.
 - **Questions come to you.** When only you can decide, or the spec looks wrong, the card waits for your answer. Agents never change the spec.
 - **Usage limits handled.** A CLI and model that hits its subscription limit leaves the team, its cards return to the board, and it rejoins after the reset.
+- **Session setup in plain language.** Ask Smith to create a session in a folder and branch with the exact worker mix you want. The create dialog also includes a folder browser and Git branch dropdown.
+- **Skills and external tools.** Import complete third-party skill packages and connect stdio or Streamable HTTP MCP servers, including OAuth. Choose which workers receive them.
+- **Smith as MCP.** The unauthenticated, stateless Streamable HTTP endpoint at `http://127.0.0.1:4100/mcp` exposes Smith management tools to workers and external clients.
+- **Markdown throughout.** Chat messages and card details render headings, lists, tables, fenced code and Mermaid diagrams.
 - **Tauri 2 desktop app** for macOS, with a local server on port 4100 and API docs at `/api/docs`.
 
 ## 🚀 Quick Start
@@ -74,9 +78,12 @@ npm install
 # Launch the full Tauri native desktop app with live reload
 npm run tauri:dev
 
-# Or run web client + server in browser mode
+# Or run the server and web client in separate terminals
+npm run server
 npm run dev
 ```
+
+The development UI is at `http://localhost:5173`; the server and API docs are on port 4100.
 
 #### Trying it with sample data
 

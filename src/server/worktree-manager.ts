@@ -46,9 +46,9 @@ export class WorktreeManager {
   /**
    * True only when `dir` is the root of its own git working tree.
    *
-   * A session directory that is not a real worktree (creation fell back to a plain folder)
-   * still sits inside the user's repository, so git commands run there would silently act
-   * on that parent repository. Every mutating command must be gated on this check.
+   * A plain directory may sit inside the user's repository, so git commands run there
+   * would silently act on that parent repository. Every mutating command must be gated
+   * on this check.
    */
   async isWorktreeRoot(dir: string): Promise<boolean> {
     try {
@@ -61,21 +61,8 @@ export class WorktreeManager {
   }
 
   async ensureGitRepo(repoPath: string): Promise<boolean> {
-    if (!fs.existsSync(repoPath)) {
-      fs.mkdirSync(repoPath, { recursive: true });
-    }
-    const gitDir = path.join(repoPath, '.git');
-    if (!fs.existsSync(gitDir)) {
-      try {
-        await this.runGit(['init', '-b', 'main'], repoPath);
-        // Initial empty commit to establish HEAD
-        fs.writeFileSync(path.join(repoPath, '.gitignore'), 'node_modules/\n.worktrees/\n.smith/\n');
-        await this.runGit(['add', '.gitignore'], repoPath);
-        await this.runGit(['commit', '-m', 'Initial commit'], repoPath);
-        return true;
-      } catch (err: any) {
-        console.warn(`Git init warning: ${err.message}`);
-      }
+    if (!(await this.isWorktreeRoot(repoPath))) {
+      throw new Error(`Choose the root of an existing Git repository: ${repoPath}`);
     }
     return true;
   }
@@ -84,25 +71,35 @@ export class WorktreeManager {
     assertSafeRef(branchName, 'branch name');
     assertSafeRef(baseBranch, 'base branch');
     await this.ensureGitRepo(repoPath);
+    try {
+      await this.runGit(['rev-parse', '--verify', `${baseBranch}^{commit}`], repoPath);
+    } catch {
+      throw new Error(`Base branch "${baseBranch}" was not found. Choose an existing branch with at least one commit.`);
+    }
 
     const worktreeDir = path.join(repoPath, '.worktrees', branchName.replace(/[^a-zA-Z0-9_-]/g, '-'));
     if (!fs.existsSync(path.dirname(worktreeDir))) {
       fs.mkdirSync(path.dirname(worktreeDir), { recursive: true });
     }
 
-    // Check if worktree already exists
-    if (!fs.existsSync(worktreeDir)) {
+    if (fs.existsSync(worktreeDir)) {
+      if (!(await this.isWorktreeRoot(worktreeDir))) {
+        throw new Error(`Worktree path already exists and is not a Git worktree: ${worktreeDir}`);
+      }
+      const { stdout } = await this.runGit(['branch', '--show-current'], worktreeDir);
+      if (stdout.trim() !== branchName) throw new Error(`Worktree path is on a different branch: ${worktreeDir}`);
+    } else {
+      let branchExists = false;
       try {
-        await this.runGit(['worktree', 'add', '-b', branchName, worktreeDir, baseBranch], repoPath);
-      } catch {
-        // Fallback: checkout branch or copy if branch already exists
-        try {
-          await this.runGit(['worktree', 'add', worktreeDir, branchName], repoPath);
-        } catch {
-          // No usable git worktree: fall back to a plain scratch directory. Git operations
-          // on it are refused by isWorktreeRoot() so they can never touch the parent repo.
-          fs.mkdirSync(worktreeDir, { recursive: true });
-        }
+        await this.runGit(['show-ref', '--verify', `refs/heads/${branchName}`], repoPath);
+        branchExists = true;
+      } catch {}
+      try {
+        await this.runGit(branchExists
+          ? ['worktree', 'add', worktreeDir, branchName]
+          : ['worktree', 'add', '-b', branchName, worktreeDir, baseBranch], repoPath);
+      } catch (err: any) {
+        throw new Error(`Could not create the Git worktree: ${String(err.stderr || err.message).trim()}`);
       }
     }
 
@@ -325,9 +322,8 @@ export class WorktreeManager {
   }
 
   /**
-   * Creates (or reuses) the branch and worktree a card is worked on in. Unlike the session
-   * worktree there is no plain-folder fallback: without a real worktree the card's diff could
-   * not be checked against its scope.
+   * Creates (or reuses) the branch and worktree a card is worked on in.
+   * Without a real worktree the card's diff could not be checked against its scope.
    */
   async createCardWorktree(repoPath: string, cardBranch: string, fromRef: string): Promise<string> {
     assertSafeRef(cardBranch, 'card branch');

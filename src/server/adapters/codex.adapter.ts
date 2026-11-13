@@ -1,3 +1,4 @@
+import type { ResolvedServer } from '../catalog.ts';
 import { AgentAdapter, TurnRequest, TurnResult } from './types.ts';
 import { AgentHealthStatus } from '../../shared/types.ts';
 import { HarnessId } from '../../shared/board.ts';
@@ -24,24 +25,27 @@ export class CodexAdapter implements AgentAdapter {
    * `codex exec` with the board attached through per-run config overrides. The bearer token is
    * passed in an environment variable so it never appears in the process arguments.
    *
-   * Not yet verified against a real Codex install: the MCP override keys follow Codex's
-   * documented config.toml layout for HTTP servers.
+   * Managed approval keeps the worker inside Codex's workspace sandbox and honors local
+   * requirements instead of asking to disable protections for the whole machine.
    */
   async runTurn(request: TurnRequest): Promise<TurnResult> {
+    const env: Record<string, string> = {};
+    const name = request.mcp.name || 'board';
+    if (request.mcp.token) env.SMITH_BOARD_TOKEN = request.mcp.token;
     const args = [
       'exec',
       '--skip-git-repo-check',
-      '--dangerously-bypass-approvals-and-sandbox',
+      '--approve-for-me',
       '-m', request.model,
-      '-c', `mcp_servers.board.url=${JSON.stringify(request.mcp.url)}`,
-      '-c', 'mcp_servers.board.bearer_token_env_var="SMITH_BOARD_TOKEN"',
-      ...extraServerOverrides(request.extraMcpServers || []),
+      '-c', `mcp_servers.${name}.url=${JSON.stringify(request.mcp.url)}`,
+      ...(request.mcp.token ? ['-c', `mcp_servers.${name}.bearer_token_env_var="SMITH_BOARD_TOKEN"`] : []),
+      ...extraServerOverrides((request.extraMcpServers || []).filter(s => s.id !== name), env),
       request.prompt
     ];
     const res = await runCli(this.getBinaryPath(), args, {
       cwd: request.cwd,
       timeoutMs: request.timeoutMs,
-      env: { SMITH_BOARD_TOKEN: request.mcp.token }
+      env
     });
     return plainResult('Codex', res);
   }
@@ -52,10 +56,20 @@ export class CodexAdapter implements AgentAdapter {
  * strings and string arrays are valid TOML, and an inline table carries the environment.
  * Values passed this way are visible in the process list, like the rest of the arguments.
  */
-export function extraServerOverrides(servers: Array<{ id: string; command: string; args: string[]; env?: Record<string, string> }>): string[] {
+export function extraServerOverrides(servers: ResolvedServer[], environment: Record<string, string> = {}): string[] {
   const out: string[] = [];
   for (const s of servers) {
     if (s.id === 'board' || !/^[A-Za-z0-9_-]+$/.test(s.id)) continue;
+    if (s.transport === 'http') {
+      out.push('-c', `mcp_servers.${s.id}.url=${JSON.stringify(s.url)}`);
+      const headers = Object.entries(s.headers || {}).map(([key, value], index) => {
+        const variable = `SMITH_MCP_${s.id.replace(/-/g, '_')}_${index}`;
+        environment[variable] = value;
+        return `${JSON.stringify(key)}=${JSON.stringify(variable)}`;
+      });
+      if (headers.length) out.push('-c', `mcp_servers.${s.id}.env_http_headers={${headers.join(',')}}`);
+      continue;
+    }
     out.push('-c', `mcp_servers.${s.id}.command=${JSON.stringify(s.command)}`);
     out.push('-c', `mcp_servers.${s.id}.args=${JSON.stringify(s.args || [])}`);
     if (s.env && Object.keys(s.env).length > 0) {

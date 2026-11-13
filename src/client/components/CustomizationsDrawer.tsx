@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { SkillImport, MCPImport, MCPConnection } from './ThirdPartyCustomizations.tsx';
 import { X, Sliders, Check, Wrench, Layers, Package, KeyRound } from 'lucide-react';
 import { SessionCustomizations, Skill, CustomMCPServer, Plugin, DiscoveredModel, Session } from '../../shared/types.ts';
 
 interface CustomizationsDrawerProps {
+  sessionId: string;
+  onCatalogChanged: () => Promise<void>;
   isOpen: boolean;
   onClose: () => void;
   customizations: SessionCustomizations;
@@ -77,6 +80,8 @@ const Section: React.FC<{ icon: React.ReactNode; title: string; hint?: string; c
 );
 
 export const CustomizationsDrawer: React.FC<CustomizationsDrawerProps> = ({
+  sessionId,
+  onCatalogChanged,
   isOpen,
   onClose,
   customizations,
@@ -108,7 +113,7 @@ export const CustomizationsDrawer: React.FC<CustomizationsDrawerProps> = ({
   }, [isOpen, customizations]);
 
   const workerIds = useMemo(() => Object.keys(workers || {}), [workers]);
-  const hasCodex = workerIds.some(id => workers[id]?.config.agentId === 'codex');
+
 
   /** Servers a selected plugin switches on, so their inputs are asked for too. */
   const viaPlugin = useMemo(() => {
@@ -162,6 +167,7 @@ export const CustomizationsDrawer: React.FC<CustomizationsDrawerProps> = ({
 
           <div className="flex-1 overflow-y-auto px-5 pb-5 space-y-6 text-xs">
             <Section icon={<Layers className="w-3.5 h-3.5 text-ink-400" />} title="Skills" hint="Added to the worker's instructions">
+              <SkillImport sessionId={sessionId} onChanged={onCatalogChanged}/>
               {allSkills.map(s => {
                 const on = skills.includes(s.id);
                 return (
@@ -170,6 +176,7 @@ export const CustomizationsDrawer: React.FC<CustomizationsDrawerProps> = ({
                       <div>
                         <div className="font-medium text-ink-800">{s.name}</div>
                         <div className="text-[11px] text-ink-500 mt-0.5">{s.description}</div>
+                        {s.source && <div className="text-[10px] text-ink-400 break-all mt-1">{s.source}</div>}
                       </div>
                       <Toggle on={on} onChange={() => setSkills(toggleIn(skills, s.id))} label={s.name} />
                     </div>
@@ -180,6 +187,7 @@ export const CustomizationsDrawer: React.FC<CustomizationsDrawerProps> = ({
             </Section>
 
             <Section icon={<Wrench className="w-3.5 h-3.5 text-ink-400" />} title="MCP servers" hint="Started by each worker's CLI">
+              <MCPImport onChanged={onCatalogChanged}/>
               {allMCPs.map(s => {
                 const state = serverState(s.id);
                 const plugins = viaPlugin[s.id];
@@ -198,6 +206,7 @@ export const CustomizationsDrawer: React.FC<CustomizationsDrawerProps> = ({
                         label={s.name}
                       />
                     </div>
+                    <MCPConnection server={s} sessionId={sessionId}/>
                     {on && (s.inputs || []).length > 0 && (
                       <div className="mt-3 space-y-2">
                         {(s.inputs || []).map(input => (
@@ -227,7 +236,6 @@ export const CustomizationsDrawer: React.FC<CustomizationsDrawerProps> = ({
                   </div>
                 );
               })}
-              {hasCodex && <p className="text-[10.5px] text-ink-400">Codex workers get these servers too; that path has not been tried with a real Codex install yet.</p>}
             </Section>
 
             <Section icon={<Package className="w-3.5 h-3.5 text-ink-400" />} title="Plugins" hint="Bundles of skills and servers">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { SmithAssistant } from './components/SmithAssistant.tsx';
 import { TopBar } from './components/TopBar.tsx';
 import { Sidebar } from './components/Sidebar.tsx';
 import { SettingsView } from './components/SettingsView.tsx';
@@ -21,6 +22,8 @@ import {
 import { BoardData, BoardLogEntry, ReviewMode, Tier, TurnRecord } from '../shared/board.ts';
 
 export const App: React.FC = () => {
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+  const [assistantRequest, setAssistantRequest] = useState<{ id: number; message: string }>();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const [availableModels, setAvailableModels] = useState<DiscoveredModel[]>([]);
@@ -77,6 +80,7 @@ export const App: React.FC = () => {
       try {
         const { type, payload } = JSON.parse(event.data);
 
+        if (type === 'smith:changed') { void refreshManagedState(payload.sessionId).catch(console.error); return; }
         if (!currentSession || payload.sessionId !== currentSession.id) return;
 
         if (type === 'cost:updated') {
@@ -270,10 +274,20 @@ export const App: React.FC = () => {
     }
   };
 
+  const refreshManagedState = async (sessionId?: string) => {
+    await fetchCustomizations();
+    const response = await fetch('/api/v1/sessions');
+    if (!response.ok) return;
+    const data = await response.json();
+    setSessions(data.sessions || []);
+    const selected = (data.sessions || []).find((s: Session) => s.id === (sessionId || currentSession?.id));
+    if (selected) await selectSession(selected);
+    else if (currentSession && !(data.sessions || []).some((s: Session) => s.id === currentSession.id)) setCurrentSession(null);
+  };
+
   const handleSendGoal = async (goal: string) => {
-    if (!currentSession) {
-      setIsNewSessionOpen(true);
-      return;
+    if (!currentSession || /(?:start|create|open)\b.*\bsession\b|\binstall\b.*\bskill\b|\b(?:connect|add)\b.*\bmcp\b/i.test(goal)) {
+      setAssistantRequest(previous => ({ id: (previous?.id || 0) + 1, message: goal })); setIsAssistantOpen(true); return;
     }
     const sessionId = currentSession.id;
     setIsSending(true);
@@ -316,7 +330,7 @@ export const App: React.FC = () => {
   const handleSetReviewMode = (mode: ReviewMode) => boardAction('/settings', 'PUT', { reviewMode: mode });
   const handleSetMinTier = (cardId: string, tier: Tier | null) => boardAction(`/cards/${cardId}`, 'PUT', { minTier: tier });
 
-  const handleCreateSession = async (input: SessionCreateInput) => {
+  const handleCreateSession = async (input: SessionCreateInput): Promise<string | null> => {
     try {
       const res = await fetch('/api/v1/sessions', {
         method: 'POST',
@@ -325,14 +339,14 @@ export const App: React.FC = () => {
       });
       const newSession = await res.json();
       if (!res.ok) {
-        window.alert(newSession.error || 'Could not create the session.');
-        return;
+        return newSession.error || 'Could not create the session.';
       }
       setSessions(prev => [newSession, ...prev]);
       setIsSettingsOpen(false);
       selectSession(newSession);
-    } catch (err) {
-      console.error(err);
+      return null;
+    } catch {
+      return 'Could not reach the server. Please try again.';
     }
   };
 
@@ -449,6 +463,7 @@ export const App: React.FC = () => {
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Top Header */}
         <TopBar
+          onAskSmith={() => setIsAssistantOpen(true)}
           currentSession={currentSession || undefined}
           costSummary={costSummary}
           onOpenNewSession={() => {
@@ -500,6 +515,8 @@ export const App: React.FC = () => {
         )}
       </div>
 
+      <SmithAssistant isOpen={isAssistantOpen} onClose={() => setIsAssistantOpen(false)} sessionId={currentSession?.id} models={availableModels} initialRequest={assistantRequest} onChanged={refreshManagedState}/>
+
       {/* Overlay Modals & Drawers */}
       <NewSessionModal
         isOpen={isNewSessionOpen}
@@ -528,6 +545,8 @@ export const App: React.FC = () => {
         <CustomizationsDrawer
           isOpen={isCustomizationsOpen}
           onClose={() => setIsCustomizationsOpen(false)}
+          sessionId={currentSession.id}
+          onCatalogChanged={() => refreshManagedState(currentSession.id)}
           customizations={currentSession.customizations}
           workers={currentSession.agents}
           allSkills={allSkills}

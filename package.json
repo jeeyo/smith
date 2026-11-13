@@ -24,6 +24,7 @@
     "icons": "node --import tsx scripts/generate-icon.ts && tauri icon public/icon.png"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-shell": "^2.5.0",
     "@types/ws": "^8.5.14",
@@ -41,7 +42,9 @@
     "react-dom": "^19.0.0",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^11.1.0",
-    "ws": "^8.18.1"
+    "ws": "^8.18.1",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.4",
@@ -64,6 +67,6 @@
     "tsx": "^4.19.3",
     "typescript": "^5.8.2",
     "vite": "^6.2.1",
-    "vitest": "^3.0.8"
+    "vitest": "^4.1.12"
   }
 }

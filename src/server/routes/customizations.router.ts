@@ -9,16 +9,24 @@ import {
   globalPlugins,
   globalSkills,
   maskCustomizations,
+  maskServer,
+  serverDefinition,
   unmaskValues
 } from '../catalog.ts';
 import { CustomMCPServer, SessionCustomizations, Skill } from '../../shared/types.ts';
 
+import { installSkill } from '../skill-import.ts';
+
 export const customizationsRouter = Router();
+customizationsRouter.post('/customizations/skills/install', async (req, res) => {
+  try { res.status(201).json(await installSkill(req.body?.source, req.body?.sessionId)); }
+  catch (err: any) { res.status(400).json({ error: err.message }); }
+});
 
 customizationsRouter.get('/customizations', (_req, res) => {
   res.json({
     skills: Array.from(globalSkills.values()),
-    mcpServers: Array.from(globalMCPs.values()),
+    mcpServers: Array.from(globalMCPs.values()).map(maskServer),
     plugins: Array.from(globalPlugins.values())
   });
 });
@@ -82,27 +90,12 @@ customizationsRouter.put('/sessions/:id/customizations', (req, res) => {
 });
 
 customizationsRouter.post('/customizations/mcp', (req, res) => {
-  const b = req.body || {};
-  if (!b.id || !b.name || !b.command) {
-    return res.status(400).json({ error: 'id, name, and command are required' });
-  }
-  if (!SAFE_ID.test(String(b.id))) {
-    return res.status(400).json({ error: 'id may use letters, digits, "-" and "_" only' });
-  }
-  const server: CustomMCPServer = {
-    id: String(b.id),
-    name: String(b.name),
-    command: String(b.command),
-    args: Array.isArray(b.args) ? b.args.map(String) : [],
-    env: b.env && typeof b.env === 'object' ? Object.fromEntries(Object.entries(b.env).map(([k, v]) => [k, String(v)])) : undefined,
-    description: b.description ? String(b.description) : undefined,
-    inputs: Array.isArray(b.inputs)
-      ? b.inputs.filter((i: any) => i && SAFE_ID.test(String(i.key))).map((i: any) => ({ key: String(i.key), label: String(i.label || i.key), secret: !!i.secret, placeholder: i.placeholder ? String(i.placeholder) : undefined }))
-      : undefined,
-    enabled: false
-  };
-  addServer(server);
-  res.status(201).json(server);
+  try {
+    const server = serverDefinition(req.body);
+    if (globalMCPs.has(server.id)) return res.status(409).json({ error: 'That server id already exists.' });
+    addServer(server);
+    res.status(201).json(maskServer(server));
+  } catch (err: any) { res.status(400).json({ error: err.message }); }
 });
 
 customizationsRouter.post('/customizations/skills', (req, res) => {

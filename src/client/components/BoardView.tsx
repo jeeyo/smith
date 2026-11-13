@@ -207,7 +207,7 @@ export const CardDetail: React.FC<{
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 pb-6 space-y-5 text-xs select-text">
-        {card.description && <div className="text-[13px] text-ink-700 leading-relaxed whitespace-pre-wrap">{card.description}</div>}
+        {card.description && <MarkdownContent content={card.description} />}
 
         <div>
           <Label>Acceptance</Label>
@@ -263,7 +263,7 @@ export const CardDetail: React.FC<{
         {card.result?.summary && (
           <div>
             <Label>Result</Label>
-            <div className="text-ink-700 whitespace-pre-wrap leading-relaxed">{card.result.summary}</div>
+            <MarkdownContent content={card.result.summary} />
           </div>
         )}
 
@@ -545,7 +545,7 @@ export const BoardView: React.FC<BoardViewProps> = ({ board, log, runningTurns, 
                   {turn.endedAt ? `${Math.round((turn.endedAt - turn.startedAt) / 1000)}s · ${turn.outcome?.replace('_', ' ')}` : `running · ${timeAgo(turn.startedAt)}`}
                 </span>
               </div>
-              {turn.summary && <div className="text-ink-600 mt-1.5 whitespace-pre-wrap line-clamp-4">{turn.summary}</div>}
+              {turn.summary && <div className="mt-1.5"><MarkdownContent content={turn.summary} /></div>}
             </div>
           ))}
         </div>
