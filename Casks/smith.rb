@@ -7,7 +7,7 @@ cask "smith" do
 
   url "https://github.com/jeeyo/smith/releases/download/v#{version}/Smith_#{version}_#{arch}.dmg"
   name "Smith"
-  desc "Smith"
+  desc "Shared board for a leaderless team of coding agents"
   homepage "https://github.com/jeeyo/smith"
 
   livecheck do
@@ -20,9 +20,10 @@ cask "smith" do
     "git",
     "node@22",
   ]
+  depends_on :macos
 
   app "Smith.app"
-  binary "#{appdir}/Smith.app/Contents/MacOS/Smith", target: "smith"
+  binary "#{appdir}/Smith.app/Contents/MacOS/smith"
 
   # Smith is not yet signed/notarized with an Apple Developer ID, so Gatekeeper
   # reports the quarantined download as "damaged". Clear the quarantine flag.

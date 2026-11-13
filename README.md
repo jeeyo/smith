@@ -36,20 +36,17 @@ Smith is a desktop app in which a team of coding agents works on your goal toget
 
 ### Option A: Installing on macOS via Homebrew (Desktop App)
 
-Install Smith directly onto macOS via Homebrew Cask from this repository:
+Smith's cask lives in this repository, which doubles as a Homebrew tap:
 
 ```bash
 brew tap jeeyo/smith https://github.com/jeeyo/smith
+brew trust --tap jeeyo/smith
 brew install --cask smith
 ```
 
-Or install directly in one command:
+Homebrew 7 only loads casks from taps you have trusted, and no longer installs a cask straight from a URL. If `brew install` still refuses, run the `brew trust` command it suggests.
 
-```bash
-brew install --cask https://raw.githubusercontent.com/jeeyo/smith/main/Casks/smith.rb
-```
-
-This installs `Smith.app` into `/Applications` and creates a `smith` CLI alias in your terminal.
+This installs `Smith.app` into `/Applications`, links a `smith` command that launches it, and pulls in `git` and `node@22`, which the app runs its server with. Smith is not yet signed or notarised, so the cask clears the download's quarantine flag after installing.
 
 ---
 
