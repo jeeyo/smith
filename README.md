@@ -1,10 +1,23 @@
-# Smith
+<p align="center"><img src="docs/images/logo.png" alt="Smith" width="112" /></p>
+
+<h1 align="center">Smith</h1>
+
+<p align="center">
 
 [![CI](https://github.com/jeeyo/smith/actions/workflows/ci.yml/badge.svg)](https://github.com/jeeyo/smith/actions/workflows/ci.yml)
 [![Release](https://github.com/jeeyo/smith/actions/workflows/release.yml/badge.svg)](https://github.com/jeeyo/smith/actions/workflows/release.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
+</p>
+
 Smith is a desktop app in which a team of coding agents works on your goal together. The agents are the CLIs you already use (**Claude Code**, **Codex**, **OpenCode**), running on your existing logins. Nobody leads the team: the agents plan on one shared board, claim cards, hand work to each other, and change the plan when something does not go as expected.
+
+![The chat beside the shared board, with work in progress and a question for the user](docs/images/board.png)
+
+<p align="center">
+  <img src="docs/images/mobile-chat.png" alt="The chat on a phone" width="260" />
+  <img src="docs/images/mobile-board.png" alt="The board on a phone" width="260" />
+</p>
 
 ---
 
@@ -67,6 +80,15 @@ npm run tauri:dev
 # Or run web client + server in browser mode
 npm run dev
 ```
+
+#### Trying it with sample data
+
+```bash
+# Starts the app with two sample sessions and scripted workers; no agent CLI is run
+npm run build && node --import tsx scripts/demo-server.ts
+```
+
+Then open `http://localhost:4199`. This is how the screenshots in the docs are made.
 
 #### Running Test Suite
 

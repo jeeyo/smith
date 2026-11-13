@@ -25,16 +25,16 @@ export const InlineMermaid: React.FC<{ content: string }> = ({ content }) => {
   };
 
   return (
-    <div className="my-3 rounded-xl border border-zinc-800 bg-zinc-950 overflow-hidden shadow-sm">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900/80 border-b border-zinc-800 text-[11px] text-zinc-400">
-        <span className="font-mono flex items-center gap-1.5 text-zinc-300 font-medium">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+    <div className="my-3 rounded-xl border border-ink-200 bg-ink-0 overflow-hidden shadow-sm">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-ink-50 border-b border-ink-200 text-[11px] text-ink-600">
+        <span className="font-mono flex items-center gap-1.5 text-ink-700 font-medium">
+          <span className="w-1.5 h-1.5 rounded-full bg-mint-400"></span>
           Mermaid Diagram
         </span>
         <div className="flex items-center gap-1">
           <button
             onClick={() => setShowCode(!showCode)}
-            className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
+            className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-ink-100 text-ink-600 hover:text-ink-800 transition-colors"
             title={showCode ? 'View rendered diagram' : 'View diagram source'}
           >
             {showCode ? <Eye className="w-3.5 h-3.5" /> : <Code className="w-3.5 h-3.5" />}
@@ -42,17 +42,17 @@ export const InlineMermaid: React.FC<{ content: string }> = ({ content }) => {
           </button>
           <button
             onClick={handleCopy}
-            className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
+            className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-ink-100 text-ink-600 hover:text-ink-800 transition-colors"
             title="Copy diagram definition"
           >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? <Check className="w-3.5 h-3.5 text-mint-600" /> : <Copy className="w-3.5 h-3.5" />}
             <span>{copied ? 'Copied' : 'Copy'}</span>
           </button>
         </div>
       </div>
-      <div className="p-3 bg-zinc-950/60 overflow-x-auto">
+      <div className="p-3 bg-ink-25 overflow-x-auto">
         {showCode ? (
-          <pre className="font-mono text-xs text-zinc-300 whitespace-pre-wrap p-2 m-0 bg-transparent border-0">
+          <pre className="font-mono text-xs text-ink-700 whitespace-pre-wrap p-2 m-0 bg-transparent border-0">
             {content}
           </pre>
         ) : (

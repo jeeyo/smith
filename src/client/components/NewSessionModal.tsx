@@ -124,48 +124,48 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({ isOpen, onClos
   };
 
   const inputClass =
-    'w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-600';
+    'w-full bg-ink-50 rounded-xl px-3 py-2 text-xs text-ink-900 placeholder-ink-400 ring-1 ring-transparent focus:outline-none focus:ring-lav-300 focus:bg-ink-0 transition';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-xl max-h-[90vh] flex flex-col text-zinc-100 shadow-2xl">
-        <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950 rounded-t-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/20 backdrop-blur-[2px] p-3 sm:p-4">
+      <div className="bg-ink-0 rounded-2xl w-full max-w-xl max-h-[92dvh] flex flex-col text-ink-900 shadow-float">
+        <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-2 flex items-start justify-between">
           <div>
-            <h2 className="text-sm font-semibold">New session</h2>
-            <p className="text-[11px] text-zinc-400">An isolated git worktree and a team of workers. You state the goal in the chat afterwards.</p>
+            <h2 className="text-base font-semibold">New session</h2>
+            <p className="text-[12px] text-ink-500 mt-0.5">An isolated git worktree and a team of workers. You state the goal in the chat afterwards.</p>
           </div>
-          <button onClick={onClose} className="p-1 rounded text-zinc-400 hover:text-zinc-200">
+          <button onClick={onClose} className="p-1.5 rounded-lg text-ink-400 hover:text-ink-800 hover:bg-ink-50">
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
+        <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-4 space-y-5 text-xs">
           <div>
-            <label className="block text-zinc-400 mb-1">Name</label>
+            <label className="block text-[11px] font-medium text-ink-500 mb-1.5">Name</label>
             <input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Checkout rewrite" className={inputClass} />
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            <div className="col-span-2">
-              <label className="block text-zinc-400 mb-1">Repository path</label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-2">
+            <div className="sm:col-span-2">
+              <label className="block text-[11px] font-medium text-ink-500 mb-1.5">Repository path</label>
               <input value={repoPath} onChange={e => setRepoPath(e.target.value)} placeholder="/Users/you/code/project" className={`${inputClass} font-mono`} />
             </div>
             <div>
-              <label className="block text-zinc-400 mb-1">Base branch</label>
+              <label className="block text-[11px] font-medium text-ink-500 mb-1.5">Base branch</label>
               <input value={baseBranch} onChange={e => setBaseBranch(e.target.value)} className={`${inputClass} font-mono`} />
             </div>
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <span className="font-semibold text-zinc-300 flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5 text-zinc-400" /> Workers
+              <span className="font-medium text-ink-800 flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-ink-400" /> Workers
               </span>
-              <button onClick={addWorker} className="flex items-center gap-1 px-2 py-0.5 rounded border border-zinc-800 hover:bg-zinc-800 text-zinc-300">
+              <button onClick={addWorker} className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-lav-700 hover:bg-lav-50 font-medium">
                 <Plus className="w-3 h-3" /> Add worker
               </button>
             </div>
-            <p className="text-[11px] text-zinc-500 mb-2">
+            <p className="text-[11px] text-ink-500 mb-2">
               All workers are peers; none leads. Workers on the same CLI and model share one subscription limit, and leave the team together when it is reached.
             </p>
             <div className="space-y-1.5">
@@ -173,12 +173,12 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({ isOpen, onClos
                 const models = modelsFor(w.agentId);
                 const state = harnessState(w.agentId);
                 return (
-                  <div key={w.key} className="flex items-center gap-1.5 p-2 rounded-lg bg-zinc-950 border border-zinc-800">
-                    <span className="w-5 text-center text-zinc-600 font-mono">{i + 1}</span>
+                  <div key={w.key} className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 p-1.5 rounded-xl bg-ink-50">
+                    <span className="w-6 text-center text-ink-300 font-mono">{i + 1}</span>
                     <select
                       value={w.agentId}
                       onChange={e => updateWorker(w.key, { agentId: e.target.value as HarnessId })}
-                      className="bg-zinc-900 border border-zinc-800 rounded px-1.5 py-1 text-zinc-200"
+                      className="bg-ink-0 rounded-lg px-2 py-1.5 text-ink-800 focus:outline-none"
                     >
                       {(Object.keys(HARNESS_LABELS) as HarnessId[]).map(h => {
                         const s = harnessState(h);
@@ -193,7 +193,7 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({ isOpen, onClos
                       <select
                         value={w.model}
                         onChange={e => updateWorker(w.key, { model: e.target.value })}
-                        className="flex-1 min-w-0 bg-zinc-900 border border-zinc-800 rounded px-1.5 py-1 text-zinc-200 font-mono"
+                        className="flex-1 min-w-[150px] bg-ink-0 rounded-lg px-2 py-1.5 text-ink-800 font-mono focus:outline-none"
                       >
                         {!models.some(m => m.id === w.model) && <option value={w.model}>{w.model || 'choose a model'}</option>}
                         {models.map(m => (
@@ -205,14 +205,14 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({ isOpen, onClos
                         value={w.model}
                         onChange={e => updateWorker(w.key, { model: e.target.value })}
                         placeholder="model id"
-                        className="flex-1 min-w-0 bg-zinc-900 border border-zinc-800 rounded px-1.5 py-1 text-zinc-200 font-mono"
+                        className="flex-1 min-w-[150px] bg-ink-0 rounded-lg px-2 py-1.5 text-ink-800 font-mono focus:outline-none"
                       />
                     )}
                     <select
                       value={w.tier}
                       title="How capable this model is. A card can require a minimum tier."
                       onChange={e => updateWorker(w.key, { tier: Number(e.target.value) as Tier, tierPinned: true })}
-                      className="bg-zinc-900 border border-zinc-800 rounded px-1.5 py-1 text-zinc-200"
+                      className="bg-ink-0 rounded-lg px-2 py-1.5 text-ink-800 focus:outline-none"
                     >
                       <option value={1}>Tier 1</option>
                       <option value={2}>Tier 2</option>
@@ -221,47 +221,47 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({ isOpen, onClos
                     <button
                       onClick={() => setWorkers(prev => prev.filter(x => x.key !== w.key))}
                       title="Remove worker"
-                      className="p-1 rounded text-zinc-500 hover:text-rose-400"
+                      className="p-1.5 rounded-lg text-ink-300 hover:text-rose-600 hover:bg-rose-50"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
-                    {!state.usable && <span className="text-rose-400 text-[10px]">{state.label}</span>}
+                    {!state.usable && <span className="text-rose-600 text-[10px]">{state.label}</span>}
                   </div>
                 );
               })}
-              {workers.length === 0 && <div className="text-zinc-500 py-2">No workers yet.</div>}
+              {workers.length === 0 && <div className="text-ink-500 py-2">No workers yet.</div>}
             </div>
           </div>
 
           <div>
-            <span className="font-semibold text-zinc-300 flex items-center gap-1.5 mb-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-zinc-400" /> Review mode
+            <span className="font-medium text-ink-800 flex items-center gap-1.5 mb-2">
+              <ShieldCheck className="w-3.5 h-3.5 text-ink-400" /> Review mode
             </span>
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
               {REVIEW_MODES.map(mode => (
                 <button
                   key={mode.id}
                   onClick={() => setReviewMode(mode.id)}
-                  className={`p-2 rounded-lg border text-left transition-colors ${
-                    reviewMode === mode.id ? 'bg-zinc-950 border-zinc-500' : 'bg-zinc-950/40 border-zinc-800 hover:border-zinc-700'
+                  className={`p-3 rounded-xl text-left transition-all ${
+                    reviewMode === mode.id ? 'bg-lav-50 ring-2 ring-lav-300' : 'bg-ink-50 hover:bg-ink-100'
                   }`}
                 >
-                  <div className="font-medium text-zinc-200">{mode.label}</div>
-                  <div className="text-[11px] text-zinc-500 mt-0.5 leading-snug">{mode.hint}</div>
+                  <div className="font-medium text-ink-800">{mode.label}</div>
+                  <div className="text-[11px] text-ink-500 mt-0.5 leading-snug">{mode.hint}</div>
                 </button>
               ))}
             </div>
-            <p className="text-[11px] text-zinc-500 mt-1.5">The finished goal is verified in every mode. You can change the mode while the team works.</p>
+            <p className="text-[11px] text-ink-500 mt-1.5">The finished goal is verified in every mode. You can change the mode while the team works.</p>
           </div>
 
-          {error && <div className="text-rose-400">{error}</div>}
+          {error && <div className="text-rose-600">{error}</div>}
         </div>
 
-        <div className="p-4 border-t border-zinc-800 bg-zinc-950 flex items-center justify-end gap-2 rounded-b-xl">
-          <button onClick={onClose} className="px-3 py-1.5 rounded-lg border border-zinc-800 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 font-medium text-xs">
+        <div className="px-5 sm:px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] flex items-center justify-end gap-2">
+          <button onClick={onClose} className="px-3.5 py-2 rounded-xl hover:bg-ink-50 text-ink-500 hover:text-ink-800 font-medium text-xs">
             Cancel
           </button>
-          <button onClick={handleCreate} className="px-3.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-900 font-medium text-xs">
+          <button onClick={handleCreate} className="px-4 py-2 rounded-xl bg-lav-200 hover:bg-lav-300 text-lav-700 font-medium text-xs">
             Create session
           </button>
         </div>

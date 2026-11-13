@@ -18,7 +18,7 @@
         "height": 920,
         "minWidth": 1024,
         "minHeight": 700,
-        "backgroundColor": "#09090b",
+        "backgroundColor": "#fcfbf8",
         "center": true,
         "decorations": true,
         "resizable": true,

@@ -21,6 +21,8 @@ A session is an isolated Git worktree plus a team of workers. Create one with **
 - **Tier.** A number from 1 to 3 saying how capable the worker's model is. Smith suggests one from the model name and you can change it. Tiers only matter if you mix stronger and weaker models: a card can require a minimum tier.
 - **Review mode** (section 6).
 
+![The new-session dialog: name, repository, workers with tiers, and review mode](images/new-session.png)
+
 Workers on the same CLI and model share one subscription limit. More workers on one subscription reach that limit sooner; they do not add capacity.
 
 ## 3. Stating a goal
@@ -53,6 +55,15 @@ The spec is yours. Workers can read it but cannot change it; a card whose change
 
 ## 4. The board
 
+![A goal in progress: the chat on the left, the board on the right](images/board.png)
+
+On a phone the chat and the board are two tabs, and the sessions list opens from the logo in the top-left corner.
+
+<p>
+  <img src="images/mobile-chat.png" alt="The chat on a phone" width="240" />
+  <img src="images/mobile-board.png" alt="The board on a phone" width="240" />
+</p>
+
 The board is on the right of the chat. Each card shows its id, title, owner, file scope and state.
 
 | State | Meaning |
@@ -71,6 +82,9 @@ Above the board:
 
 - **Team.** One chip per worker. A spinner means it has a turn running; a greyed chip means it is away for a usage limit.
 - **Plan changes.** The change log: who changed the plan, what they did and why.
+
+  ![The plan-changes log, newest first, with the reason for each change](images/plan-changes.png)
+
 - **Turns.** Each agent run, with its outcome.
 
 ## 5. How the team works
@@ -112,6 +126,8 @@ In every mode, once all cards are finished, one worker runs the spec's verify co
 
 ## 7. When the team needs you
 
+![A card waiting for the user, with its thread and an answer box](images/card-question.png)
+
 A card moves to **Needs you** when:
 
 - a worker asks a question, including whenever the spec looks wrong or incomplete;
@@ -137,6 +153,8 @@ Smith recognises a usage limit by matching the CLI's error text. If a CLI change
 
 ## 9. Finishing
 
+![A verified goal with the diff summary and the merge button](images/goal-complete.png)
+
 When the goal is verified, the chat shows the diff summary of the session branch against its base branch, with two actions:
 
 - **Merge into `<base>`** merges the session branch into the base branch in your repository. If that merge conflicts it is aborted and reported; nothing is left half-merged.
@@ -145,6 +163,8 @@ When the goal is verified, the chat shows the diff summary of the session branch
 Deleting a session removes its worktrees and its board. The session branch stays in the repository.
 
 ## 10. Settings
+
+![Settings: paths to the agent CLIs](images/settings.png)
 
 - **Agent Binaries:** paths to `claude`, `codex` and `opencode`, with a check that each exists.
 - **App & Workspace:** Git path, default repository path, server port, display currency.

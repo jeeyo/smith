@@ -20,25 +20,26 @@ import {
 } from 'lucide-react';
 import { MessageArtifact } from '../../shared/types.ts';
 
-// Configure mermaid once with clean dark theme
+// Configure mermaid once, in the app's pastel palette
 try {
   mermaid.initialize({
     startOnLoad: false,
-    theme: 'dark',
+    theme: 'base',
     securityLevel: 'strict',
-    fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+    fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
     themeVariables: {
-      darkMode: true,
-      background: '#09090b',
-      mainBkg: '#18181b',
-      nodeBorder: '#3f3f46',
-      clusterBkg: '#18181b',
-      clusterBorder: '#27272a',
-      lineColor: '#71717a',
-      textColor: '#f4f4f5',
-      primaryColor: '#27272a',
-      primaryTextColor: '#fafafa',
-      primaryBorderColor: '#52525b'
+      background: '#FCFBF8',
+      mainBkg: '#ECE7FB',
+      nodeBorder: '#C6B8F1',
+      clusterBkg: '#F7F5F1',
+      clusterBorder: '#E3DFD7',
+      lineColor: '#A29D93',
+      textColor: '#2F2D2A',
+      primaryColor: '#ECE7FB',
+      primaryTextColor: '#2F2D2A',
+      primaryBorderColor: '#C6B8F1',
+      secondaryColor: '#DDF3E5',
+      tertiaryColor: '#DFEEFA'
     }
   });
 } catch {}
@@ -66,11 +67,11 @@ export const ArtifactPreview: React.FC<ArtifactPreviewProps> = ({ artifacts }) =
   };
 
   return (
-    <div className={`mt-4 rounded-xl border border-zinc-800 bg-zinc-950/90 overflow-hidden flex flex-col shadow-md ${
-      isFullscreen ? 'fixed inset-4 z-50 bg-zinc-950 border-zinc-700 max-h-[92vh]' : ''
+    <div className={`mt-4 rounded-xl border border-ink-100 bg-ink-25 overflow-hidden flex flex-col shadow-md ${
+      isFullscreen ? 'fixed inset-4 z-50 bg-ink-0 border-ink-300 max-h-[92vh]' : ''
     }`}>
       {/* Top Header: Artifact Selector Tabs */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-800 bg-zinc-900/60 overflow-x-auto gap-2">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-ink-100 bg-ink-50 overflow-x-auto gap-2">
         <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
           {artifacts.map((art) => {
             const isActive = art.id === activeArtifact?.id;
@@ -83,16 +84,16 @@ export const ArtifactPreview: React.FC<ArtifactPreviewProps> = ({ artifacts }) =
                 }}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors flex-shrink-0 cursor-pointer ${
                   isActive
-                    ? 'bg-zinc-800 text-zinc-100 border border-zinc-700'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+                    ? 'bg-ink-100 text-ink-900 border border-ink-300'
+                    : 'text-ink-600 hover:text-ink-800 hover:bg-ink-50'
                 }`}
               >
-                {art.type === 'mermaid' && <Code className="w-3.5 h-3.5 text-sky-400" />}
-                {art.type === 'html' && <Eye className="w-3.5 h-3.5 text-emerald-400" />}
-                {art.type === 'image' && <ImageIcon className="w-3.5 h-3.5 text-amber-400" />}
-                {art.type === 'other' && <Download className="w-3.5 h-3.5 text-purple-400" />}
+                {art.type === 'mermaid' && <Code className="w-3.5 h-3.5 text-sky-600" />}
+                {art.type === 'html' && <Eye className="w-3.5 h-3.5 text-mint-600" />}
+                {art.type === 'image' && <ImageIcon className="w-3.5 h-3.5 text-butter-600" />}
+                {art.type === 'other' && <Download className="w-3.5 h-3.5 text-lav-600" />}
                 <span className="truncate max-w-[140px]">{art.name}</span>
-                <span className="text-[10px] uppercase font-mono px-1 py-0.2 rounded bg-zinc-900/80 text-zinc-500 border border-zinc-800/80">
+                <span className="text-[10px] uppercase font-mono px-1 py-0.2 rounded bg-ink-50 text-ink-500 border border-ink-100">
                   {art.type}
                 </span>
               </button>
@@ -103,11 +104,11 @@ export const ArtifactPreview: React.FC<ArtifactPreviewProps> = ({ artifacts }) =
         {/* Action Controls */}
         <div className="flex items-center gap-1 flex-shrink-0">
           {(activeArtifact?.type === 'html' || activeArtifact?.type === 'mermaid') && (
-            <div className="flex items-center rounded-lg bg-zinc-900 border border-zinc-800 p-0.5 mr-1">
+            <div className="flex items-center rounded-xl bg-ink-50 p-0.5 mr-1">
               <button
                 onClick={() => setViewMode('preview')}
                 className={`px-2 py-0.5 text-[11px] rounded transition-colors ${
-                  viewMode === 'preview' ? 'bg-zinc-800 text-zinc-100 font-medium' : 'text-zinc-400 hover:text-zinc-200'
+                  viewMode === 'preview' ? 'bg-ink-100 text-ink-900 font-medium' : 'text-ink-600 hover:text-ink-800'
                 }`}
               >
                 Preview
@@ -115,7 +116,7 @@ export const ArtifactPreview: React.FC<ArtifactPreviewProps> = ({ artifacts }) =
               <button
                 onClick={() => setViewMode('code')}
                 className={`px-2 py-0.5 text-[11px] rounded transition-colors ${
-                  viewMode === 'code' ? 'bg-zinc-800 text-zinc-100 font-medium' : 'text-zinc-400 hover:text-zinc-200'
+                  viewMode === 'code' ? 'bg-ink-100 text-ink-900 font-medium' : 'text-ink-600 hover:text-ink-800'
                 }`}
               >
                 Code
@@ -124,25 +125,25 @@ export const ArtifactPreview: React.FC<ArtifactPreviewProps> = ({ artifacts }) =
           )}
 
           {activeArtifact?.type === 'html' && viewMode === 'preview' && (
-            <div className="hidden sm:flex items-center rounded-lg bg-zinc-900 border border-zinc-800 p-0.5 mr-1">
+            <div className="hidden sm:flex items-center rounded-xl bg-ink-50 p-0.5 mr-1">
               <button
                 onClick={() => setDeviceWidth('100%')}
                 title="Desktop (100%)"
-                className={`p-1 rounded ${deviceWidth === '100%' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+                className={`p-1 rounded ${deviceWidth === '100%' ? 'bg-ink-100 text-ink-900' : 'text-ink-500 hover:text-ink-700'}`}
               >
                 <Monitor className="w-3 h-3" />
               </button>
               <button
                 onClick={() => setDeviceWidth('768px')}
                 title="Tablet (768px)"
-                className={`p-1 rounded ${deviceWidth === '768px' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+                className={`p-1 rounded ${deviceWidth === '768px' ? 'bg-ink-100 text-ink-900' : 'text-ink-500 hover:text-ink-700'}`}
               >
                 <Tablet className="w-3 h-3" />
               </button>
               <button
                 onClick={() => setDeviceWidth('375px')}
                 title="Mobile (375px)"
-                className={`p-1 rounded ${deviceWidth === '375px' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+                className={`p-1 rounded ${deviceWidth === '375px' ? 'bg-ink-100 text-ink-900' : 'text-ink-500 hover:text-ink-700'}`}
               >
                 <Smartphone className="w-3 h-3" />
               </button>
@@ -154,7 +155,7 @@ export const ArtifactPreview: React.FC<ArtifactPreviewProps> = ({ artifacts }) =
               href={`${activeArtifact.url}&download=1`}
               download={activeArtifact.name}
               title={`Download ${activeArtifact.name}`}
-              className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 transition-colors"
+              className="p-1.5 rounded-lg bg-ink-50 hover:bg-ink-100 text-ink-600 hover:text-ink-800 border border-ink-100 transition-colors"
             >
               <Download className="w-3.5 h-3.5" />
             </a>
@@ -164,16 +165,16 @@ export const ArtifactPreview: React.FC<ArtifactPreviewProps> = ({ artifacts }) =
             <button
               onClick={() => handleCopy(activeArtifact.content)}
               title="Copy code"
-              className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 transition-colors"
+              className="p-1.5 rounded-lg bg-ink-50 hover:bg-ink-100 text-ink-600 hover:text-ink-800 border border-ink-100 transition-colors"
             >
-              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              {copied ? <Check className="w-3.5 h-3.5 text-mint-600" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
           )}
 
           <button
             onClick={() => setIsFullscreen(!isFullscreen)}
             title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-            className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 transition-colors"
+            className="p-1.5 rounded-lg bg-ink-50 hover:bg-ink-100 text-ink-600 hover:text-ink-800 border border-ink-100 transition-colors"
           >
             {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>
@@ -181,7 +182,7 @@ export const ArtifactPreview: React.FC<ArtifactPreviewProps> = ({ artifacts }) =
       </div>
 
       {/* Artifact Render Body */}
-      <div className={`p-4 overflow-auto flex items-center justify-center bg-zinc-950 ${
+      <div className={`p-4 overflow-auto flex items-center justify-center bg-ink-0 ${
         isFullscreen ? 'flex-1' : 'min-h-[220px] max-h-[500px]'
       }`}>
         {activeArtifact && (
@@ -191,7 +192,7 @@ export const ArtifactPreview: React.FC<ArtifactPreviewProps> = ({ artifacts }) =
               viewMode === 'preview' ? (
                 <MermaidRenderer content={activeArtifact.content || ''} />
               ) : (
-                <pre className="w-full h-full p-4 font-mono text-xs text-zinc-200 bg-zinc-900/60 rounded-lg overflow-auto border border-zinc-800 select-text">
+                <pre className="w-full h-full p-4 font-mono text-xs text-ink-800 bg-ink-50 rounded-lg overflow-auto border border-ink-100 select-text">
                   <code>{activeArtifact.content}</code>
                 </pre>
               )
@@ -209,11 +210,11 @@ export const ArtifactPreview: React.FC<ArtifactPreviewProps> = ({ artifacts }) =
                     srcDoc={activeArtifact.content}
                     src={activeArtifact.content ? undefined : activeArtifact.url}
                     sandbox="allow-scripts allow-forms allow-modals"
-                    className="w-full h-[440px] rounded-lg border border-zinc-800 bg-white dark:bg-zinc-900 shadow-inner"
+                    className="w-full h-[440px] rounded-lg border border-ink-100 bg-white dark:bg-ink-50 shadow-inner"
                   />
                 </div>
               ) : (
-                <pre className="w-full h-full p-4 font-mono text-xs text-zinc-200 bg-zinc-900/60 rounded-lg overflow-auto border border-zinc-800 select-text">
+                <pre className="w-full h-full p-4 font-mono text-xs text-ink-800 bg-ink-50 rounded-lg overflow-auto border border-ink-100 select-text">
                   <code>{activeArtifact.content}</code>
                 </pre>
               )
@@ -226,10 +227,10 @@ export const ArtifactPreview: React.FC<ArtifactPreviewProps> = ({ artifacts }) =
                   <img
                     src={activeArtifact.url || (activeArtifact.content ? `data:${activeArtifact.mimeType || 'image/svg+xml'};utf8,${encodeURIComponent(activeArtifact.content)}` : '')}
                     alt={activeArtifact.name}
-                    className="max-h-[420px] max-w-full object-contain rounded-lg border border-zinc-800 bg-zinc-900/40 p-1"
+                    className="max-h-[420px] max-w-full object-contain rounded-lg border border-ink-100 bg-ink-50 p-1"
                   />
                 </div>
-                <div className="text-[11px] text-zinc-500 font-mono flex items-center gap-3">
+                <div className="text-[11px] text-ink-500 font-mono flex items-center gap-3">
                   <span>{activeArtifact.name}</span>
                   {activeArtifact.sizeBytes && <span>{(activeArtifact.sizeBytes / 1024).toFixed(1)} KB</span>}
                 </div>
@@ -238,23 +239,23 @@ export const ArtifactPreview: React.FC<ArtifactPreviewProps> = ({ artifacts }) =
 
             {/* 4. OTHER FILE TYPES: DOWNLOAD CARD */}
             {activeArtifact.type === 'other' && (
-              <div className="flex flex-col items-center justify-center p-8 text-center max-w-md w-full bg-zinc-900/40 rounded-xl border border-zinc-800/80 space-y-3">
-                <div className="w-12 h-12 rounded-xl bg-zinc-800 flex items-center justify-center text-zinc-300">
+              <div className="flex flex-col items-center justify-center p-8 text-center max-w-md w-full bg-ink-50 rounded-xl border border-ink-100 space-y-3">
+                <div className="w-12 h-12 rounded-xl bg-ink-100 flex items-center justify-center text-ink-700">
                   {activeArtifact.name.endsWith('.zip') || activeArtifact.name.endsWith('.tar') ? (
-                    <FileArchive className="w-6 h-6 text-purple-400" />
+                    <FileArchive className="w-6 h-6 text-lav-600" />
                   ) : activeArtifact.name.endsWith('.json') || activeArtifact.name.endsWith('.ts') ? (
-                    <FileCode className="w-6 h-6 text-sky-400" />
+                    <FileCode className="w-6 h-6 text-sky-600" />
                   ) : (
-                    <File className="w-6 h-6 text-zinc-400" />
+                    <File className="w-6 h-6 text-ink-600" />
                   )}
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-zinc-200 truncate">{activeArtifact.name}</h3>
-                  <p className="text-xs text-zinc-400 mt-1">
+                  <h3 className="text-sm font-semibold text-ink-800 truncate">{activeArtifact.name}</h3>
+                  <p className="text-xs text-ink-600 mt-1">
                     {activeArtifact.description || 'Binary or structured data artifact generated by agent in worktree.'}
                   </p>
                   {activeArtifact.sizeBytes && (
-                    <span className="text-[11px] text-zinc-500 font-mono mt-1 block">
+                    <span className="text-[11px] text-ink-500 font-mono mt-1 block">
                       Size: {(activeArtifact.sizeBytes / 1024).toFixed(1)} KB
                     </span>
                   )}
@@ -263,7 +264,7 @@ export const ArtifactPreview: React.FC<ArtifactPreviewProps> = ({ artifacts }) =
                   <a
                     href={activeArtifact.url ? `${activeArtifact.url}&download=1` : '#'}
                     download={activeArtifact.name}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-900 text-xs font-semibold shadow transition-colors"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-lav-200 hover:bg-lav-300 text-lav-700 text-xs font-semibold shadow transition-colors"
                   >
                     <Download className="w-4 h-4" />
                     <span>Download {activeArtifact.name}</span>
@@ -316,9 +317,9 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ content }) => 
 
   if (renderError) {
     return (
-      <div className="w-full p-4 rounded-lg bg-rose-950/20 border border-rose-800/40 text-xs text-rose-300">
+      <div className="w-full p-4 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-700">
         <div className="font-semibold mb-1">Mermaid Render Notice</div>
-        <div className="font-mono text-[11px] text-zinc-400 whitespace-pre-wrap">{content}</div>
+        <div className="font-mono text-[11px] text-ink-600 whitespace-pre-wrap">{content}</div>
       </div>
     );
   }

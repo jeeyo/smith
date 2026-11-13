@@ -37,6 +37,7 @@ export const App: React.FC = () => {
   // Layout & Navigation State
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState<boolean>(false);
 
   // Modals & Drawers
   const [allSkills, setAllSkills] = useState<Skill[]>([]);
@@ -396,28 +397,47 @@ export const App: React.FC = () => {
     }
   };
 
-  return (
-    <div className="flex h-screen w-screen bg-zinc-950 text-zinc-100 overflow-hidden font-sans">
-      {/* Left Sidebar: Collapsible Chat List & App Settings Trigger */}
+  /** On phones the sidebar is a drawer, and any choice made in it closes the drawer. */
+  const renderSidebar = (asDrawer: boolean) => {
+    const closeDrawer = () => asDrawer && setIsMobileNavOpen(false);
+    return (
       <Sidebar
         sessions={sessions}
         currentSession={currentSession}
         onSelectSession={(session) => {
           setIsSettingsOpen(false);
           selectSession(session);
+          closeDrawer();
         }}
         onOpenNewSession={() => {
           setIsSettingsOpen(false);
           setIsNewSessionOpen(true);
+          closeDrawer();
         }}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSettings={() => {
+          setIsSettingsOpen(true);
+          closeDrawer();
+        }}
         isSettingsOpen={isSettingsOpen}
         onDeleteSession={handleDeleteSession}
         onDeleteMultipleSessions={handleDeleteMultipleSessions}
-        isCollapsed={isSidebarCollapsed}
-        onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
+        isCollapsed={asDrawer ? false : isSidebarCollapsed}
+        onToggleCollapse={asDrawer ? closeDrawer : () => setIsSidebarCollapsed(prev => !prev)}
         agentHealth={agentHealth}
       />
+    );
+  };
+
+  return (
+    <div className="flex h-dvh w-full bg-ink-25 text-ink-900 overflow-hidden font-sans">
+      {/* Sidebar: fixed on wider screens, a drawer on phones */}
+      <div className="hidden md:flex h-full">{renderSidebar(false)}</div>
+      {isMobileNavOpen && (
+        <div className="md:hidden fixed inset-0 z-40 flex">
+          {renderSidebar(true)}
+          <button aria-label="Close menu" className="flex-1 bg-ink-900/20" onClick={() => setIsMobileNavOpen(false)} />
+        </div>
+      )}
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
@@ -438,6 +458,7 @@ export const App: React.FC = () => {
           onToggleSidebar={() => setIsSidebarCollapsed(prev => !prev)}
           isSidebarCollapsed={isSidebarCollapsed}
           onOpenSettings={() => setIsSettingsOpen(prev => !prev)}
+          onOpenNav={() => setIsMobileNavOpen(true)}
         />
 
         {/* View Switcher: App Settings or Single Goal Chat Interface */}

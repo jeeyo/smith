@@ -20,7 +20,8 @@
     "test": "vitest run",
     "tauri": "tauri",
     "tauri:dev": "concurrently -k -p \"[{name}]\" -n \"SERVER,VITE,TAURI\" -c \"blue,green,magenta\" \"tsx watch src/server/index.ts\" \"vite\" \"tauri dev\"",
-    "tauri:build": "npm run build:ui && npm run build:server && tauri build"
+    "tauri:build": "npm run build:ui && npm run build:server && tauri build",
+    "icons": "node --import tsx scripts/generate-icon.ts && tauri icon public/icon.png"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",

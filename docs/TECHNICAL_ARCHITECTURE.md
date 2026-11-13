@@ -115,7 +115,14 @@ All Git commands run through `execFile` with argument arrays; branch names are v
 
 The Rust shell starts `dist-server/index.cjs` with the system Node, waits for `/api/v1/health`, then points the webview at `http://127.0.0.1:4100`. It kills the server on exit.
 
-## 10. Tests
+## 10. Look and feel
+
+- **Palette** (`tailwind.config.js`): warm neutrals named `ink` for text, surfaces and lines, and six pastels that each carry one meaning: `mint` done and ready, `sky` in progress, `peach` review, `butter` waiting for the user, `rose` failures, `lav` primary actions and focus. Fills use 50 to 200, text on them 600 to 700.
+- **Mascot** (`src/shared/logo.ts`): a 24 x 24 pixel grid and its palette. It is drawn as one SVG path per colour over a solid tile, with a slight overlap between colours, so no hairline seams appear at fractional scales such as phone pixel ratios. `Logo.tsx` draws it in the app; `npm run icons` writes `public/logo.svg`, `public/icon.png` and `docs/images/logo.png` from it and then regenerates the Tauri app icons.
+- **Phones**: below 768 px the sidebar becomes a drawer opened from the logo, the chat and board become tabs, text fields use 16 px so iOS does not zoom in on focus, and the layout respects the screen's safe areas.
+- **Screenshots** (`docs/images`): taken from `scripts/demo-server.ts`, which starts the server with two sample sessions and scripted workers, so no agent CLI runs.
+
+## 11. Tests
 
 `npm test` runs Vitest:
 
