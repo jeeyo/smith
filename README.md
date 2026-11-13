@@ -135,7 +135,7 @@ For more detail, see:
 
 - **CI (`.github/workflows/ci.yml`)**: Automatically triggers on all pull/merge requests and pushes to `main`. Installs dependencies, builds all targets, validates Tauri shell compilation, and runs the Vitest test suite.
 - **Automated Releases (`.github/workflows/release.yml`)**: Triggers on every semantic tag push matching `vX.X.X` (e.g., `v0.1.0`):
-  1. Builds multi-platform Tauri desktop installers (Windows `.exe`/`.msi`, Linux `.AppImage`/`.deb`, macOS `.dmg`).
+  1. Builds Tauri desktop installers for macOS (`.dmg`, Apple silicon and Intel) and Linux (`.AppImage`, `.deb`).
   2. Automatically updates and commits the Homebrew Cask formula `Casks/smith.rb` with the new version and calculated SHA256 checksums.
   3. Publishes an official GitHub Release with auto-generated release notes and attached desktop binary artifacts.
 
