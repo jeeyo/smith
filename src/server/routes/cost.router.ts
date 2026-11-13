@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getSession } from './sessions.router.ts';
+import { getSession } from '../session-store.ts';
 import { costEngine } from '../cost-engine.ts';
 
 export const costRouter = Router();

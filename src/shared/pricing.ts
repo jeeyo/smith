@@ -24,7 +24,7 @@ export const DEFAULT_MODEL_PRICING: Record<string, ModelPricing> = {
   'claude-3-5-haiku': { inputPerMillion: 0.80, outputPerMillion: 4.00, cachedPerMillion: 0.08 },
   'claude-3-opus': { inputPerMillion: 15.00, outputPerMillion: 75.00, cachedPerMillion: 1.50 },
 
-  // Google Gemini & Antigravity (Active 2026 Models & Aliases)
+  // Google Gemini
   'gemini-4-argon': { inputPerMillion: 2.00, outputPerMillion: 8.00, cachedPerMillion: 0.50 },
   'gemini-3.1-pro': { inputPerMillion: 1.25, outputPerMillion: 5.00, cachedPerMillion: 0.3125 },
   'gemini-3.1-ultra': { inputPerMillion: 5.00, outputPerMillion: 20.00, cachedPerMillion: 1.25 },
@@ -35,7 +35,6 @@ export const DEFAULT_MODEL_PRICING: Record<string, ModelPricing> = {
   'flash_lite': { inputPerMillion: 0.05, outputPerMillion: 0.20, cachedPerMillion: 0.0125 },
   'gemini-2.5-pro': { inputPerMillion: 1.25, outputPerMillion: 5.00, cachedPerMillion: 0.3125 },
   'gemini-2.5-flash': { inputPerMillion: 0.075, outputPerMillion: 0.30, cachedPerMillion: 0.01875 },
-  'antigravity': { inputPerMillion: 2.00, outputPerMillion: 8.00, cachedPerMillion: 0.50 },
 
   // OpenAI Codex
   'o3-mini': { inputPerMillion: 1.10, outputPerMillion: 4.40, cachedPerMillion: 0.55 },

@@ -28,7 +28,6 @@ interface SidebarProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   agentHealth: Record<string, AgentHealthStatus>;
-  hindsightConnected: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -42,8 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onDeleteMultipleSessions,
   isCollapsed,
   onToggleCollapse,
-  agentHealth,
-  hindsightConnected
+  agentHealth
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -134,11 +132,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Bottom icon actions */}
         <div className="pt-2 border-t border-zinc-900 flex flex-col items-center gap-2">
-          <div
-            title={hindsightConnected ? 'Hindsight Active' : 'Hindsight Offline'}
-            className="w-2.5 h-2.5 rounded-full"
-            style={{ backgroundColor: hindsightConnected ? '#34d399' : '#52525b' }}
-          />
           <button
             onClick={onOpenSettings}
             title="App Settings"
@@ -422,13 +415,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex items-center gap-1.5">
             <span
               className="w-1.5 h-1.5 rounded-full"
-              style={{ backgroundColor: hindsightConnected ? '#34d399' : '#71717a' }}
+              style={{ backgroundColor: readyAgentsCount > 0 ? '#34d399' : '#71717a' }}
             />
-            <span>Hindsight {hindsightConnected ? 'Online' : 'Offline'}</span>
+            <span>{readyAgentsCount > 0 ? 'Ready' : 'No agent CLI ready'}</span>
           </div>
           <div className="flex items-center gap-1 text-zinc-500 text-[10px] font-mono">
             <ShieldCheck className="w-3 h-3 text-zinc-400" />
-            <span>{readyAgentsCount} Agents</span>
+            <span>{readyAgentsCount} CLI{readyAgentsCount === 1 ? '' : 's'}</span>
           </div>
         </div>
 

@@ -15,8 +15,7 @@ describe('ModelDiscoveryEngine (Dynamic Model Probing)', () => {
     const codexModels = engine.getModels('codex');
     expect(codexModels.length).toBeGreaterThan(0);
 
-    const antigravityModels = engine.getModels('antigravity');
-    expect(antigravityModels.length).toBeGreaterThan(0);
+    expect(engine.getModels('antigravity')).toEqual([]);
   });
 
   it('allows registering custom experimental models', () => {

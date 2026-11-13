@@ -4,25 +4,20 @@
 [![Release](https://github.com/jeeyo/smith/actions/workflows/release.yml/badge.svg)](https://github.com/jeeyo/smith/actions/workflows/release.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-Smith is a high-performance, API-first **cooperative multi-agent coding environment** packaged as a lightweight, blazing-fast native desktop application using **Tauri 2.0**. It provides dual-layer persistent memory powered by the official **Vectorize Hindsight** daemon, real-time multi-agent orchestration, interactive human-in-the-loop clarifications, dynamic model discovery, and cost telemetry.
-
-![Smith Desktop Interface](docs/images/screenshot_left_sidebar_chat_list.png)
+Smith is a desktop app in which a team of coding agents works on your goal together. The agents are the CLIs you already use (**Claude Code**, **Codex**, **OpenCode**), running on your existing logins. Nobody leads the team: the agents plan on one shared board, claim cards, hand work to each other, and change the plan when something does not go as expected.
 
 ---
 
-## 🌟 Key Features
+## Key features
 
-- 🖥️ **Ultra-Lightweight Tauri 2.0 Desktop App**: Native Rust desktop shell powered by OS WebView2 / WebKit, with native lifecycle management, sidecar server supervision, and ~97% smaller installer size compared to Electron (~4 MB vs ~120 MB).
-- 🗂️ **Collapsible Left Sidebar**: Clean, dedicated chat session management with real-time search, Git worktree branch badges, active session indicators, one-click deletion, and collapsible icon view.
-- ⚙️ **Application-Level Configuration Hub**: In-app configuration dashboard (`SettingsView`) to customize executable paths for **Claude Code**, **Google Antigravity**, **OpenCode**, **Codex**, and **Astral `uv`/`uvx`**, alongside **Vectorize Hindsight** provider selection (`openai`, `anthropic`, `gemini`, `ollama`), masked API keys, and workspace defaults with live on-disk path verification.
-- 🧠 **Embedded Vectorize Hindsight Daemon**: Zero-friction embedded memory engine using `@vectorize-io/hindsight-all` and `uvx hindsight-embed`, providing persistent bank storage, cross-session episodic memory, facts, and anti-patterns.
-- 🤖 **Goal Orchestrator & Multi-Agent Swarms**: Autonomous orchestrator backed by real agent harnesses (Claude Code, Antigravity, OpenCode, Codex) with support for parallel multi-worker execution.
-- 💬 **Interactive Human-In-The-Loop**: Native support for agent questionnaires (`ask_question`), interactive decision prompts, and unified chat streaming.
-- ⚡ **Dual-Layer Memory**: High-speed in-memory short-term cache combined with long-term semantic knowledge banks.
-- 📊 **Real-Time Telemetry & Costs**: Live token usage, financial expenditure breakdown, and active agent execution tracing.
-- 📖 **Interactive OpenAPI Documentation**: Embedded Swagger UI available at `/api/docs` with live REST endpoints.
-
----
+- **A shared board.** A goal becomes cards with acceptance criteria, file scopes and dependencies. Every agent reads and edits the same board through MCP tools.
+- **No lead agent.** Agents pull work. The server only enforces rules: one claimer per card, no overlapping file scopes, changes to someone else's card are proposals, reviews are done by a different agent.
+- **A plan that adapts.** Any agent can add, split, block, cancel or hand on a card, with a recorded reason. Failed turns, rejected reviews and merge conflicts put work back on the board.
+- **Isolated git work.** Each session has its own worktree and branch; each card has its own branch, checked against the card's file scope before it is merged. Your checkout is never touched.
+- **Review modes.** Fast (no card reviews), Normal (larger or riskier cards) or Thorough (every card). The finished goal is always verified.
+- **Questions come to you.** When only you can decide, or the spec looks wrong, the card waits for your answer. Agents never change the spec.
+- **Usage limits handled.** A CLI and model that hits its subscription limit leaves the team, its cards return to the board, and it rejoins after the reset.
+- **Tauri 2 desktop app** for macOS, with a local server on port 4100 and API docs at `/api/docs`.
 
 ## 🚀 Quick Start
 
@@ -49,8 +44,8 @@ This installs `Smith.app` into `/Applications` and creates a `smith` CLI alias i
 
 #### Prerequisites
 - [Node.js](https://nodejs.org/) v22+
-- [Astral `uv`](https://docs.astral.sh/uv/) (required for Hindsight daemon and Python-based tool runtimes)
 - Git
+- At least one agent CLI, installed and logged in: [Claude Code](https://claude.com/claude-code), Codex or OpenCode
 
 #### Installation
 
@@ -91,47 +86,35 @@ The output packages will be located in the `src-tauri/target/release/bundle/` di
 
 ---
 
-## 🏛️ Architecture Overview
+## Architecture overview
 
 ```mermaid
-flowchart TD
-    subgraph HostOptions ["Deployment Runtimes"]
-        Tauri["Tauri 2.0 Native Desktop App (Win / Mac / Linux)"]
+flowchart LR
+    User["You (chat)"] --> Server
+    subgraph App ["Smith (Tauri shell + local server)"]
+        UI["React UI: chat and board"] <--> Server["Express + WebSocket server"]
+        Server --> Board["Board: cards, rules, change log"]
+        Server --> Scheduler["Scheduler: wakes idle agents"]
+        Server --> Git["Git: session and per-card worktrees"]
     end
-
-    subgraph AppHost ["Smith Application Host"]
-        Renderer["React 19 + Tailwind Client UI"]
-        Sidebar["Collapsible Sidebar (Sidebar.tsx)"]
-        SettingsView["Application Configuration (SettingsView.tsx)"]
-        GoalChat["Single Goal Chat (GoalChat.tsx)"]
-        Server["Express & WebSocket Orchestrator (Port 4100)"]
-    end
-
-    subgraph Hindsight ["Vectorize Hindsight Engine (Port 8888)"]
-        HSDaemon["Embedded uvx Hindsight Daemon"]
-        HSClient["@vectorize-io/hindsight-client"]
-        MemoryBank["SQLite / Vector Knowledge Bank"]
-    end
-
-    HostOptions --> AppHost
-    Renderer --> Sidebar
-    Renderer --> SettingsView
-    Renderer --> GoalChat
-    AppHost --> Server
-    Server --> HSClient
-    HSClient --> HSDaemon
-    HSDaemon --> MemoryBank
+    Scheduler -->|one-shot turn| Claude["Claude Code"]
+    Scheduler -->|one-shot turn| Codex["Codex"]
+    Scheduler -->|one-shot turn| OpenCode["OpenCode"]
+    Claude -->|MCP tools| Board
+    Codex -->|MCP tools| Board
+    OpenCode -->|MCP tools| Board
 ```
 
-For more details, see:
-- [Technical Architecture](docs/TECHNICAL_ARCHITECTURE.md)
-- [User Manual](docs/USER_MANUAL.md)
+For more detail, see:
+- [Design: the peer board](docs/designs/peer-board.md)
+- [Technical architecture](docs/TECHNICAL_ARCHITECTURE.md)
+- [User manual](docs/USER_MANUAL.md)
 
 ---
 
 ## 🔄 CI / CD
 
-- **CI (`.github/workflows/ci.yml`)**: Automatically triggers on all pull/merge requests and pushes to `main`. Installs dependencies with `uv`, builds all targets, validates Tauri shell compilation, and runs the Vitest test suite.
+- **CI (`.github/workflows/ci.yml`)**: Automatically triggers on all pull/merge requests and pushes to `main`. Installs dependencies, builds all targets, validates Tauri shell compilation, and runs the Vitest test suite.
 - **Automated Releases (`.github/workflows/release.yml`)**: Triggers on every semantic tag push matching `vX.X.X` (e.g., `v0.1.0`):
   1. Builds multi-platform Tauri desktop installers (Windows `.exe`/`.msi`, Linux `.AppImage`/`.deb`, macOS `.dmg`).
   2. Automatically updates and commits the Homebrew Cask formula `Casks/smith.rb` with the new version and calculated SHA256 checksums.

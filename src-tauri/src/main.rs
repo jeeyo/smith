@@ -175,7 +175,6 @@ fn spawn_backend_server() -> Option<Child> {
     let mut cmd = Command::new(node_exe);
     cmd.arg(&script);
     cmd.env("PORT", PORT.to_string());
-    cmd.env("UV_PYTHON", "3.12");
 
     if let Some(dp) = dist_path {
         log_msg(&format!("Setting DIST_PATH to {:?}", dp));
@@ -188,7 +187,7 @@ fn spawn_backend_server() -> Option<Child> {
         log_msg(&format!("Set child working directory to {:?}", parent));
     }
 
-    // Ensure user local bin and package manager paths are on PATH for Astral uv / uvx / node
+    // Ensure user local bin and package manager paths are on PATH for node and the agent CLIs
     let home = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")).ok();
     if let Some(h) = home {
         let local_bin = PathBuf::from(&h).join(".local").join("bin");

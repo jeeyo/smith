@@ -25,9 +25,6 @@ jobs:
           node-version: 22
           cache: 'npm'
 
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v5
-
       - name: Install Linux system dependencies
         run: |
           sudo apt-get update

@@ -1,330 +1,127 @@
-# Smith Technical Architecture & Contributor Guide
+# Smith technical architecture
 
-This document details the internal architecture, protocol specifications, data flows, and design decisions of **Smith**—an API-first, cooperative multi-agent coding environment.
+Smith is a local server with a React UI, wrapped in a Tauri 2 shell. The design is described in [designs/peer-board.md](designs/peer-board.md); this document maps it to the code.
 
 ```mermaid
 flowchart TB
-    subgraph UI ["Client Layer (React 19 + Vite + Tailwind)"]
-        Sidebar["Collapsible Sidebar (Sidebar.tsx: Chat List, Search, Branch Badges, Delete)"]
-        TopBar["TopBar (Breadcrumbs, Health Badges, Cost, Settings Trigger)"]
-        GoalChat["Single Unified Goal Chat (Conversational Stream)"]
-        PlanCard["Inline Cooperative Task DAG Card"]
-        DiffCard["Worktree Diff Preview & One-Click Merge Card"]
-        SettingsView["Application Configuration View (SettingsView.tsx)"]
-        BehindScenes["Collapsible Behind-the-Scenes Drawer"]
-        TerminalModal["In-App Terminal Modal (ConPTY /ws/pty/*)"]
-        CustomizationsDrawer["Customizations & MCP Settings Drawer"]
+    subgraph Client ["src/client (React 19, Vite, Tailwind)"]
+        App["App.tsx: state, REST calls, WebSocket"]
+        Chat["GoalChat.tsx: chat, diff card"]
+        BoardUI["BoardView.tsx: columns, card detail, plan changes, turns"]
     end
-
-    subgraph API ["HTTP REST & WebSocket Gateway (Express + ws)"]
-        APIRouter["API Router (/api/v1/*)"]
-        GoalRouter["Goal & Chat Router (/sessions/:id/goal, /chat)"]
-        WorktreeRouter["Worktree Router (/sessions/:id/worktree/*)"]
-        SystemRouter["System, PTY & Config Router (/system/config, /system/pty/*, /system/agents/*)"]
-        WSHub["WebSocket Hub (/ws/events, /ws/pty/*)"]
-        SwaggerDocs["OpenAPI 3.0 Documentation (/api/docs)"]
+    subgraph Server ["src/server (Express, ws)"]
+        Routes["routes/*: sessions, goal, board, worktree, system, cost, customizations"]
+        MCP["mcp-server.ts: /mcp, JSON-RPC, per-turn tokens"]
+        Tools["board-tools.ts: tool definitions and git side effects"]
+        Board["board.ts: cards and referee rules (no I/O)"]
+        Store["board-store.ts, session-store.ts, session-chat.ts: persistence"]
+        Sched["scheduler.ts: wakes peers, runs turns, builds prompts"]
+        Team["team.ts: user input to goal/card/answer; board events to chat"]
+        Git["worktree-manager.ts: session and card worktrees, diff, merge"]
+        Adapters["adapters/*: one-shot turn per CLI"]
     end
-
-    subgraph CoreEngine ["Smith Core Orchestrator"]
-        GoalOrchestrator["Automated Goal Orchestrator & Delta-Planner"]
-        AgentHealthEngine["Live Agent Health & Diagnostic Prober"]
-        TaskLeaseMgr["Atomic Task Lease & File Scope Manager"]
-        TeamBus["Inter-Agent Message Bus"]
-        CostEngine["USD Cost & Token Accounting Engine"]
-        WorktreeMgr["Git Worktree Isolation & Diff Engine"]
-        PTYMgr["Interactive PTY Process Manager"]
-        ConfigMgr["Configuration Manager (config.ts: ~/.smith/config.json)"]
-        HindsightService["Hindsight Semantic Vector Memory Service"]
-    end
-
-    subgraph ProcessAdapters ["Standardized Process Adapters (src/server/adapters)"]
-        ClaudeAdapter["ClaudeAdapter (claude -p non-interactive)"]
-        CodexAdapter["CodexAdapter (powershell null pipe stdin)"]
-        AntigravityAdapter["AntigravityAdapter (daemon & ACP host)"]
-        OpencodeAdapter["OpencodeAdapter (OpenCode CLI harness)"]
-    end
-
-    subgraph LocalMemory ["Embedded Native Vector Memory & Vectorize Hindsight"]
-        VectorEngine["Sparse Character 3-Gram & Token Vectorizer"]
-        CosineRanker["Cosine Similarity Semantic Ranking Engine"]
-        BankStore[("Local Bank JSON | External Hindsight (:8888)")]
-    end
-
-    UI <-->|HTTP REST & WebSocket| API
-    API <--> CoreEngine
-    Sidebar --> GoalChat
-    TopBar --> SettingsView
-    GoalRouter --> GoalOrchestrator
-    WorktreeRouter --> WorktreeMgr
-    SystemRouter --> PTYMgr
-    SystemRouter --> AgentHealthEngine
-    SystemRouter --> ConfigMgr
-    GoalOrchestrator --> AgentHealthEngine
-    GoalOrchestrator --> TaskLeaseMgr
-    GoalOrchestrator --> TeamBus
-    GoalOrchestrator --> CostEngine
-    GoalOrchestrator --> WorktreeMgr
-    GoalOrchestrator --> HindsightService
-    ConfigMgr --> ProcessAdapters
-    ConfigMgr --> HindsightService
-    AgentHealthEngine --> ProcessAdapters
-    CoreEngine <--> ProcessAdapters
-    HindsightService --> VectorEngine
-    VectorEngine --> CosineRanker
-    CosineRanker --> BankStore
+    App <--> Routes
+    Routes --> Team --> Board
+    Sched --> Adapters
+    Adapters -->|CLI connects back| MCP --> Tools --> Board
+    Tools --> Git
+    Board --> Store
 ```
 
----
+## 1. The board (`board.ts`, `shared/board.ts`)
 
-## 1. The Protocol Triad
+`Board` holds the cards for one session and decides whether a change is allowed. It performs no I/O and takes its clock as a parameter, so the rules are unit-tested directly (`tests/board.test.ts`).
 
-Smith achieves vendor-neutral agent orchestration by unifying three open standards:
+- **Card states:** `ready`, `claimed`, `in_review`, `done`, `blocked`, `failed`, `cancelled`, `needs_user`.
+- **Card kinds:** `plan`, `work`, `review`, `verify`, `merge-conflict`.
+- **Versions:** `version` increases on every accepted change. `planVersion` increases only when the plan itself changes (cards created, split, edited, cancelled, blocked). Plan-editing tools must send the `planVersion` they read; a stale one is refused.
+- **Log:** every accepted change produces a `BoardLogEntry` (actor, action, card, reason).
+- **File scopes:** `matchesScope` and `scopesOverlap`. A trailing `/*` means the whole directory. Overlap checks err towards reporting an overlap.
 
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        The Smith Protocol Triad                        │
-├────────────────────────────────────────────────────────────────────────┤
-│ 1. ACP (Agent Client Protocol)                                         │
-│    - Role: Host ↔ Agent Processes                                      │
-│    - Transport: stdio JSON-RPC 2.0                                     │
-│    - Features: initialize, session/prompt, session/stream,             │
-│      session/configure, permission/request                             │
-│                                                                        │
-│ 2. MCP (Model Context Protocol)                                        │
-│    - Role: Agents ↔ Tools, Skills & Custom MCP Servers                 │
-│    - Multiplexer: Session MCP Gateway (`src/server/mcp-gateway.ts`)    │
-│    - Capabilities: retain, recall, reflect, claim_task, broadcast      │
-│                                                                        │
-│ 3. Vectorize Hindsight Official SDKs & Native Semantic Vector Engine   │
-│    - Role: Authoritative Shared Memory & Beliefs Engine                │
-│    - Daemon Supervisor: @vectorize-io/hindsight-all (HindsightServer)  │
-│    - Client SDK: @vectorize-io/hindsight-client (HindsightClient)      │
-│    - Offline Fallback: Embedded subword/token sparse vector cosine     │
-│      similarity engine with persistence in ~/.smith/banks/             │
-└────────────────────────────────────────────────────────────────────────┘
-```
+Rules enforced in `claimBlocker`, `submit`, `edit`, `delegate`, `bounce` and friends correspond to section 5 of the design doc. `bounce` also raises a card's minimum tier after repeated failures at one tier, and sends a card to the user at the bounce limit.
 
----
+`parseSpecTasks` reads the `smith-tasks` block at the end of a spec.
 
-## 2. Dedicated Agent Process Adapters
+## 2. Persistence (`board-store.ts`, `session-store.ts`, `session-chat.ts`)
 
-Located in `src/server/adapters/`:
-Each local agent CLI presents specific operating system and stdio quirks on Windows and Unix:
+Everything is under the storage directory (`~/.smith`, or `SMITH_STORAGE_DIR`; tests use a temp directory):
 
-```
-src/server/adapters/
-├── types.ts                # AgentAdapter & AdapterExecutionResult interfaces
-├── claude.adapter.ts       # Non-interactive -p execution & /login detection
-├── codex.adapter.ts        # PowerShell null-pipe ($null |) stdin EOF handling
-├── antigravity.adapter.ts  # Daemon language_server / agy socket harness
-├── opencode.adapter.ts     # OpenCode CLI harness & dynamic binary resolution
-└── index.ts                # getAgentAdapter(agentId) registry
-```
+| Path | Content |
+|---|---|
+| `sessions/<id>.json` | Session: repository, worktree, workers, review mode, customizations |
+| `boards/<id>.json` | Board, rewritten atomically on every change |
+| `boards/<id>.log.jsonl` | Append-only change log |
+| `chats/<id>.json` | Session conversation |
+| `specs/<id>.md` | Spec, when the goal was typed in the chat |
+| `config.json` | App settings |
 
-### Stdio Handling & Binary Override Specifications:
-* **Claude (`claude.adapter.ts`)**:
-  - Claude CLI blocks if standard input is attached but idle. The adapter executes via `-p "<prompt>"` with `stdio: ['ignore', 'pipe', 'pipe']` and parses stdout/stderr for `Not logged in` and `/login` prompts.
-  - Dynamically reads `config.agentBinaries.claude` with fallback to `Claude-Data` or global npm path.
-* **Codex (`codex.adapter.ts`)**:
-  - Codex CLI blocks waiting for stdin EOF on Windows. The adapter runs `$null | & "${bin}" exec "${prompt}" --skip-git-repo-check` and detects rate-limiting signatures (`usage limit reached. Resets at [time]`).
-  - Reads `config.agentBinaries.codex`.
-* **Antigravity (`antigravity.adapter.ts`)**:
-  - Connects to the local Google Antigravity `language_server.exe` daemon or simulated ACP session with guaranteed zero-conflict task leases.
-  - Reads `config.agentBinaries.antigravity`.
-* **OpenCode (`opencode.adapter.ts`)**:
-  - Executes local models and OpenCode command line tasks.
-  - Reads `config.agentBinaries.opencode`.
+`BoardStore` emits `changed` after each board change. The WebSocket hub, the scheduler and `team.ts` all listen to it.
 
----
+## 3. Board tools and MCP (`board-tools.ts`, `mcp-server.ts`)
 
-## 3. Pre-Flight Health-Aware Task Allocation
+`BOARD_TOOLS` lists the fourteen tools: `board_read`, `card_claim`, `card_note`, `card_submit`, `card_release`, `card_block`, `card_create`, `card_split`, `card_edit`, `card_cancel`, `card_delegate`, `proposal_answer`, `review_verdict`, `ask_user`.
 
-Before decomposing or dispatching tasks, `GoalOrchestrator` queries `agentHealthEngine.getAll()`:
+`BoardTools.call` applies a tool for one peer and adds the git work:
 
-```mermaid
-flowchart TD
-    GoalDeclared["User Declares Goal"] --> HealthCheck["Probe Live Agent Health (agentHealthEngine)"]
-    HealthCheck --> IsHealthy{"Is Assigned Agent Ready?"}
-    IsHealthy -->|Yes (ready)| AssignDirect["Assign to Primary Agent (e.g. @codex)"]
-    IsHealthy -->|No (rate_limited or not_logged_in)| AutoRoute["Auto-Route to Ready Fallback (@antigravity)"]
-    AutoRoute --> TagMetadata["Annotate: routedFrom: @claude, routingReason: Not Logged In"]
-    AssignDirect --> DAG["Generate Cooperative Task DAG"]
-    TagMetadata --> DAG
-    DAG --> Render["Render UI Pill: @antigravity (routed from @claude)"]
-```
+- **claim:** creates the card's branch and worktree (`<session branch>--<card id>`). For a merge-conflict card it reuses the target card's branch and merges the session branch into it, leaving the conflict markers. For a review card it returns the diff.
+- **submit:** commits everything in the card worktree, computes the diff against the session branch, refuses changes to the spec file, and passes the diff to `Board.submit`, which checks the scope and decides whether a review is needed.
+- **merge:** serialised per session. A clean merge marks the card done and removes its worktree. A conflict is aborted and becomes a merge-conflict card.
 
-When an agent is rate-limited or unauthenticated:
-1. Subtask assignment dynamically shifts to an active, unblocked agent (defaulting to `@antigravity`).
-2. Subtasks carry `routedFrom` and `routingReason` metadata.
-3. The UI renders `@antigravity (routed from @claude)` with tooltips and warning banners providing immediate remediation actions.
+`mcp-server.ts` serves the tools at `POST /mcp` as JSON-RPC 2.0 with one JSON response per request (`initialize`, `tools/list`, `tools/call`, `ping`). Every agent turn gets its own bearer token mapped to one peer in one session; the token is revoked when the turn ends.
 
----
+If the session directory is not a real Git worktree (worktree creation failed and Smith fell back to a plain folder), cards are worked in that folder and scope checks and merges are skipped.
 
-## 4. Conversational Delta-Planning
+## 4. Scheduler (`scheduler.ts`)
 
-Follow-up user prompts must not re-trigger cumbersome 3-phase macro decompositions:
-1. `GoalOrchestrator.executeGoal` checks if prior completed orchestrator messages with an existing plan exist.
-2. If `isConversationalDelta === true`:
-   - Extracts focused intent from user prompt (e.g. test refinement, schema update).
-   - Generates a **single targeted delta task**:
-     - Locks only the specific file scope (e.g. `tests/*` or `src/auth/*`).
-     - Preserves the active worktree branch and existing files.
-     - Submits completion reflection to Hindsight memory.
+`tick(sessionId)` runs on every board change, turn end and a 30-second timer, for goals in the `running` state:
 
----
+1. Return expired leases and let removed peers whose reset time has passed rejoin.
+2. For each idle peer whose CLI is healthy, in rotating order, ask the board for a wake reason: an open proposal on a card it holds, a claimed card to continue, or cards it may claim. Start a turn if there is one. Two peers are never pointed at the same claimable card.
+3. Send cards nobody can take to the user.
+4. If nothing is running: create the verify card when all cards are finished, record why the goal is waiting, or pause it when no peer can move any card.
 
-## 5. Worktree Git Diff Preview & One-Click Merge
+`startTurn` issues the token, builds the prompt (`buildTurnPrompt`) and calls the adapter. `finishTurn` records usage, and handles the outcome: a usage limit removes the CLI and model from the team; a logged-out CLI is marked not ready; another failure bounces the peer's card; two turns in a row without a board tool call are treated as a failure.
 
-Located in `src/server/worktree-manager.ts` and `src/server/routes/worktree.router.ts`:
+The scheduler never chooses a card for a peer or edits the plan. `turnRunner` is replaceable, which is how `tests/team.test.ts` runs scripted peers through the real board, tools and git.
 
-- **Diff Extraction**: Computes structured changes (`+additions`, `-deletions`, status per file) against `baseBranch` or `HEAD`.
-- **Clean Merge Verification**: Validates that changes can merge cleanly without Git conflict markers.
-- **REST Endpoints**:
-  - `GET /api/v1/sessions/:id/worktree/summary`
-  - `POST /api/v1/sessions/:id/worktree/merge` -> Executes non-fast-forward merge into `main` and returns commit SHA.
-  - `POST /api/v1/sessions/:id/worktree/discard` -> Resets worktree state.
-- **Root Workspace Safety Isolation**:
-  - `WorktreeManager` includes explicit safety guards preventing `mergeWorktree` or `discardWorktree` from running destructive `git checkout` or `git reset --hard` on `process.cwd()` or during test runs.
+## 5. Adapters (`adapters/*`)
 
----
+Each adapter has `probeHealth` (a `--version` call, which spends no usage) and `runTurn`.
 
-## 6. Artifact Pipeline & Preview Architecture
+| CLI | How the board is attached | Status |
+|---|---|---|
+| Claude Code | `claude -p --output-format json --mcp-config <file>`, prompt on stdin | Flags verified against the installed CLI; a full live run has not been done |
+| Codex | `codex exec` with `-c mcp_servers.board.*` overrides, token in an environment variable | Not verified |
+| OpenCode | `opencode run` with inline config in `OPENCODE_CONFIG_CONTENT` | Not verified |
 
-Located in `src/client/components/ArtifactPreview.tsx`, `src/client/components/GoalChat.tsx`, and `src/server/routes/worktree.router.ts`:
+All CLIs are spawned with real argument arrays and no shell (`process-utils.ts`). `adapters/shared.ts` recognises usage-limit and not-logged-in messages by matching text and extracts a reset time when it can.
 
-Smith enables agents to output rich deliverables that render automatically in the chat stream:
+## 6. Team (`team.ts`)
 
-```
-Agent Execution / Deliverables
-      │
-      ├── .mmd / ```mermaid ────> Client Mermaid.js v12 -> Rendered Inline SVG
-      ├── .html / ```html   ────> Sandboxed <iframe> (allow-scripts allow-forms allow-same-origin allow-modals)
-      │                           └─ Viewport toggles: Desktop (100%), Tablet (768px), Mobile (375px)
-      ├── Images (.svg/.png) ───> Responsive Checkerboard Canvas + Zoom/Fit Controls
-      ├── Interactive Questions ─> Multi-Choice Options Modal (ask_question)
-      └── Other (.json/.pdf) ───> Direct File Card with One-Click Attachment Download
-```
+`handleUserInput` routes chat input: start a goal (first message, or after a completed goal), resume, answer the one waiting card (or the card named by an id prefix), or add a card. `startGoal` resolves the spec, parses its task list and seeds the board. `startTeamAnnouncements` turns board events into chat messages: questions, pauses, removals and rejoins, verification results and completion with a diff summary.
 
-### Security & Directory Traversal Protection:
-- The worktree file-serving endpoint (`GET /api/v1/sessions/:id/worktree/file`) normalizes the requested path using `path.resolve` and verifies that the canonical target resides strictly within the session's isolated `worktree.path` or `session.repoPath`.
-- Any attempt to escape the worktree root using relative paths (`../../`) triggers a strict `403 Forbidden` response (`Directory traversal denied`).
-- Non-previewable file downloads set `Content-Disposition: attachment; filename="<basename>"`.
+## 7. Git (`worktree-manager.ts`)
 
----
+All Git commands run through `execFile` with argument arrays; branch names are validated. Mutating commands run only in a directory that is the root of its own worktree (`isWorktreeRoot`), so a fallback folder inside the user's repository can never cause a commit, reset or clean on that repository.
 
-## 7. Embedded In-App Terminal Architecture
+## 8. HTTP, WebSocket and security (`index.ts`)
 
-Located in `src/server/pty-manager.ts` and `src/client/components/TerminalModal.tsx`:
+- REST under `/api/v1` (see `/api/docs`), the board for agents under `/mcp`, the built UI as static files.
+- WebSocket events: `board:updated`, `chat:message`, `turn:started`, `turn:ended`, `cost:updated`; terminal streams under `/ws/pty/<id>`.
+- The server binds to `127.0.0.1`. Requests and WebSocket connections carrying a browser `Origin` are accepted only from loopback or Tauri origins. Requests without an `Origin` (the desktop shell, agent CLIs, tests) are allowed.
+- Files served from a session workspace are path-checked against the real worktree and repository paths and sent with a sandboxing Content-Security-Policy.
 
-- Spawns interactive pseudo-terminal sessions using system ConPTY / `powershell.exe`.
-- Bridges bidirectional text streaming via WebSocket `/ws/pty/:ptyId`.
-- Provides instant one-click execution for `claude login` or ChatGPT CLI authentication directly within the browser interface.
-- Automatically re-probes agent health upon modal exit.
+## 9. Desktop shell (`src-tauri`)
 
----
+The Rust shell starts `dist-server/index.cjs` with the system Node, waits for `/api/v1/health`, then points the webview at `http://127.0.0.1:4100`. It kills the server on exit.
 
-## 8. Vectorize Hindsight Official SDKs & Native Vector Memory
+## 10. Tests
 
-Located in `src/server/hindsight-service.ts`:
+`npm test` runs Vitest:
 
-- **Daemon Lifecycle Supervisor (`@vectorize-io/hindsight-all`)**:
-  - Automatically manages the local Hindsight daemon using `HindsightServer({ port: 8888 })`.
-  - Probes daemon health and attempts programmatic startup via `uvx hindsight-embed` without requiring manual Docker commands.
-- **Client SDK (`@vectorize-io/hindsight-client`)**:
-  - Uses typed `HindsightClient({ baseUrl })` for executing `createBank`, `retain`, `recall`, and `reflect` memory operations against the running daemon.
-- **Embedded Native Semantic Vector Engine (Offline Fallback)**:
-  - If the daemon cannot be spawned (e.g. `uvx` not present in host environment), Smith seamlessly falls back to an embedded vector similarity engine.
-  - **Sparse Subword Vectorizer**: Tokenizes text into lowercase words and character 3-grams (`c[i..i+3]`), applying term-frequency weighting and L2 normalization:
-    $$\|V\| = \sqrt{\sum w_i^2}$$
-  - **Cosine Similarity Ranker**:
-    $$\text{sim}(Q, D) = \sum_{t \in Q \cap D} Q_t \cdot D_t$$
-  - Ranks domain facts, experiences, and anti-patterns with millisecond latency, enabling zero-config semantic search completely offline.
+- `tests/board.test.ts`: scopes, spec parsing and every referee rule.
+- `tests/team.test.ts`: whole goals with scripted peers over the real MCP endpoint and real Git repositories: planning, replanning, review by another peer, scope and spec refusals, merge conflict and resolution, usage-limit removal and rejoin, questions to the user, failure escalation, and requests added mid-goal.
+- `tests/hardening.test.ts`: origin policy, shell-free spawning, worktree safety, file endpoint, pricing.
+- `tests/system-config.test.ts`, `tests/cost-engine.test.ts`, `tests/model-discovery.test.ts`.
 
----
-
-## 9. Decentralized In-IDE Broadcast Chat Layer
-
-Located in `src/server/broadcast-layer.ts` and `src/server/team-bus.ts`:
-
-- **Peer-to-Peer Protocol**: Enables agents to negotiate dynamic task allocation, broadcast emergency coordinate alerts (build fails, test runner crashes, rate limit lockouts with timeout countdowns), and publish error retractions.
-- **Direct Context Ingestion**:
-  - Automatically captures unread peer broadcast messages and injects them directly into the standard context of teammates prior to each turn execution cycle.
-
----
-
-## 10. Per-Session Dual-Layer Persistent Memory & Compaction Survival
-
-Located in `src/server/session-memory.ts`:
-
-- **Per-Session Hierarchy**: Rooted under `.smith/memory/sessions/{sessionId}`.
-  - **Shared Team Workspace (`team/knowledge.md`)**: Synchronized markdown workspace for architecture contracts, API schemas, and certified milestones.
-  - **Private Agent Scratchpads (`agents/{agentId}/scratchpad.md`)**: Private task stacks and execution hypotheses isolated per agent.
-- **Compaction Survival Routine**:
-  - When context limits threaten roll-overs, prompts agents to serialize durable findings into `team/knowledge.md`.
-  - Clears working scratchpads to compact memory while guaranteeing critical facts survive indefinitely.
-
----
-
-## 11. The Observer Agent: Independent Safety & Verification Harness
-
-Located in `src/server/observer-agent.ts`:
-
-- **The 5th Instance (`@observer`)**: A passive, non-coding agent instance that audits telemetry, git diffs, and execution traces.
-- **Hallucination Detection**: Audits ground-truth files on disk to confirm claimed edits and test files actually exist.
-- **Specification Gaming Scans**: Flags empty test blocks, `@ts-ignore` abuse, and hardcoded validation stubs.
-- **Milestone Ground-Truth Certification**: Signs off on completion milestones with confidence metrics before presenting completed goals to users.
-
----
-
-## 12. Application Configuration & Binary Probing Architecture
-
-Located in `src/server/config.ts` and `src/server/routes/system.router.ts`:
-
-```
-~/.smith/config.json
-├── agentBinaries: { claude, antigravity, opencode, codex, uv }
-├── hindsight: { provider, apiKey, url, autoStartDaemon, defaultBank }
-└── app: { gitPath, defaultRepoPath, port, currency, budgetAlertThreshold }
-```
-
-- **Persistence Layer**: Reads and saves global configuration in `~/.smith/config.json`.
-- **System Binary Scanner (`detectDefaultBinaries`)**: Probes default Windows and Unix installation paths for `git.exe`, Claude Code (`Claude-Data`, npm global), Google Antigravity (`language_server.exe`, `agy-node.cmd`), OpenCode, and Astral `uv`.
-- **Live On-Disk Verification (`POST /api/v1/system/config/probe-binary`)**: Checks direct file path existence or resolves through system `PATH` using `where.exe`/`which`, returning `{ exists, isExecutable, resolvedPath }`.
-- **Live Hindsight Latency Probe (`POST /api/v1/system/config/test-hindsight`)**: Queries the target Hindsight URL with timeout abort controllers and returns round-trip ping latency in milliseconds.
-- **Dynamic Adapter Hot-Apply**: Updating settings hot-applies changes immediately to running adapters without dropping active sessions.
-
----
-
-## 13. Tauri 2.0 Native Desktop Architecture
-
-Located in `src-tauri/` and `.github/workflows/release.yml`:
-
-Smith is packaged as a high-performance, native desktop application using **Tauri 2.0**:
-
-- **Native Rust Shell**: Uses the operating system's native WebView (WebView2 on Windows, WebKit on macOS/Linux), eliminating Chromium bundle overhead and reducing binary size to ~4 MB.
-- **Embedded Node.js Supervision**: Automatically spawns and monitors the Express backend (`dist-server/index.cjs`) on port 4100 as a supervised background child process with graceful teardown on application exit.
-- **Cross-Platform Bundles**:
-  - **Windows**: Produces signed NSIS setups (`.exe`) and Windows Installer packages (`.msi`).
-  - **macOS**: Produces Apple Silicon (`aarch64`) and Intel (`x86_64`) disk images (`.dmg`) with Homebrew Cask automated updates.
-  - **Linux**: Produces universal AppImage (`.AppImage`) and Debian packages (`.deb`).
-
----
-
-## 14. Automated Test Suite
-
-Run all automated unit, integration, and configuration tests with vitest:
-```bash
-npm test
-```
-
-Test coverage includes 10 test suites and **54 passing tests**:
-- `tests/system-config.test.ts`: App-level configuration CRUD, JSON persistence, binary verification, and Hindsight connectivity probes.
-- `tests/api.test.ts`: REST endpoints, session CRUD, and health probes.
-- `tests/cost-engine.test.ts`: Real-time USD pricing and token accounting.
-- `tests/goal-orchestrator.test.ts`: Zero-racing task decomposition, health-aware task rerouting, conversational delta-planning, worktree merge endpoints, artifact generation, and observer signoff.
-- `tests/hindsight-service.test.ts`: Persistent memory, anti-pattern retain/recall, and local sparse vector semantic similarity ranking.
-- `tests/dual-layer-memory.test.ts`: Per-session dual-layer file hierarchy (`team/knowledge.md` vs `agents/{agentId}/scratchpad.md`) and compaction survival.
-- `tests/broadcast-layer.test.ts`: Peer proposals, consensus voting, emergency coordinate alerts, error retractions, and context ingestion.
-- `tests/observer-agent.test.ts`: Passive telemetry audit, hallucination detection, specification gaming detection, and milestone certification.
-- `tests/model-discovery.test.ts`: CLI and ACP model discovery.
-- `tests/task-lease-manager.test.ts`: Atomic lease claims and 409 conflict detection.
+Port binding is required, so the suite does not run inside a sandbox that blocks local listeners.

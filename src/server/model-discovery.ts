@@ -1,12 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { exec } from 'node:child_process';
-import { promisify } from 'node:util';
 import { config } from './config.ts';
 import { AgentId, DiscoveredModel } from '../shared/types.ts';
-import { agentHealthEngine } from './agent-health.ts';
-
-const execAsync = promisify(exec);
+import { runCli } from './process-utils.ts';
+import { getAgentAdapter } from './adapters/index.ts';
 
 export class ModelDiscoveryEngine {
   private discoveredModels: Map<string, DiscoveredModel> = new Map();
@@ -22,7 +19,6 @@ export class ModelDiscoveryEngine {
     await Promise.allSettled([
       this.discoverCodexModels(),
       this.discoverClaudeModels(),
-      this.discoverAntigravityModels(),
       this.discoverOpenCodeModels()
     ]);
 
@@ -129,81 +125,29 @@ export class ModelDiscoveryEngine {
     }
   }
 
-  private async discoverAntigravityModels() {
-    // Dynamically probe Google Antigravity language_server.exe and agentapi CLI
-    const localAppData = process.env.LOCALAPPDATA || path.join(config.homeDir, 'AppData', 'Local');
-    const defaultAgPath = path.join(localAppData, 'Programs', 'antigravity', 'resources', 'bin', 'language_server.exe');
-    const agHealth = agentHealthEngine.get('antigravity');
-    const isInstalled = (agHealth ? agHealth.installed : true) || fs.existsSync(defaultAgPath);
+  private async discoverOpenCodeModels() {
+    // Only discover models configured in opencode CLI if installed
+    const adapter = getAgentAdapter('opencode');
+    if (!adapter.isInstalled()) return;
 
-    if (!isInstalled) {
-      return;
-    }
-
-    // Active 2026 Gemini generation backed by language_server.exe & agentapi CLI
-    const geminiModels = [
-      { id: 'gemini-4-argon', name: 'Gemini 4 Argon (Antigravity Flagship Lead)', isDefault: true, speed: 'deep' as const, reasoning: true, context: 2_000_000 },
-      { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro (Deep Reasoning & Multimodal)', isDefault: false, speed: 'deep' as const, reasoning: true, context: 2_000_000 },
-      { id: 'gemini-3.1-ultra', name: 'Gemini 3.1 Ultra (Ultra-Scale Multimodal Reasoning)', isDefault: false, speed: 'deep' as const, reasoning: true, context: 2_000_000 },
-      { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (High Speed & Coding)', isDefault: false, speed: 'fast' as const, reasoning: false, context: 1_000_000 },
-      { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite (Ultra Low Latency)', isDefault: false, speed: 'fast' as const, reasoning: false, context: 1_000_000 },
-      // agentapi CLI tiers (--model=<flash_lite|flash|pro>)
-      { id: 'pro', name: 'Gemini Pro (CLI Alias · Argon 4 / 3.1 Pro)', isDefault: false, speed: 'deep' as const, reasoning: true, context: 2_000_000 },
-      { id: 'flash', name: 'Gemini Flash (CLI Alias · 3.8 Flash)', isDefault: false, speed: 'fast' as const, reasoning: false, context: 1_000_000 },
-      { id: 'flash_lite', name: 'Gemini Flash Lite (CLI Alias · 3.1 Lite)', isDefault: false, speed: 'fast' as const, reasoning: false, context: 1_000_000 },
-      // Legacy backwards-compatibility
-      { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Legacy)', isDefault: false, speed: 'balanced' as const, reasoning: true, context: 1_000_000 }
-    ];
-
-    for (const m of geminiModels) {
-      this.discoveredModels.set(`antigravity:${m.id}`, {
-        id: m.id,
-        name: m.name,
-        agentId: 'antigravity',
-        provider: 'Google',
-        source: 'cli-probe',
-        isDefault: m.isDefault,
-        capabilities: {
-          reasoning: m.reasoning,
-          contextWindow: m.context,
-          speed: m.speed
-        }
+    // `opencode models` prints one "provider/model" per line.
+    const res = await runCli(adapter.getBinaryPath(), ['models'], { timeoutMs: 8000 });
+    if (res.code !== 0) return;
+    for (const line of res.stdout.split('\n')) {
+      const id = line.trim();
+      if (!/^[\w.@-]+\/[\w.:@/-]+$/.test(id)) continue;
+      this.discoveredModels.set(`opencode:${id}`, {
+        id,
+        name: id,
+        agentId: 'opencode',
+        provider: id.split('/')[0],
+        source: 'cli-probe'
       });
     }
   }
 
-  private async discoverOpenCodeModels() {
-    // Only discover models configured in opencode CLI if installed
-    try {
-      const { stdout } = await execAsync('opencode models --json', { timeout: 3000 });
-      const parsed = JSON.parse(stdout);
-      if (Array.isArray(parsed)) {
-        for (const item of parsed) {
-          const id = item.id || item.name;
-          // Filter out local unsupported models like deepseek or qwen (not supported by harness)
-          if (/deepseek|qwen|ollama/i.test(id) || /deepseek|qwen|ollama/i.test(item.name || '')) {
-            continue;
-          }
-          this.discoveredModels.set(`opencode:${id}`, {
-            id,
-            name: item.name || id,
-            agentId: 'opencode',
-            provider: item.provider || 'OpenCode',
-            source: 'cli-probe',
-            isDefault: item.isDefault || false
-          });
-        }
-      }
-    } catch {
-      // Opencode is not installed or returned error: do NOT inject fallback local models (deepseek/qwen).
-      // Only list models if actually configured in opencode.
-    }
-  }
-
   getModels(agentId?: AgentId): DiscoveredModel[] {
-    const all = Array.from(this.discoveredModels.values()).filter(
-      m => !/deepseek|qwen|ollama/i.test(m.id) && !/deepseek|qwen|ollama/i.test(m.name)
-    );
+    const all = Array.from(this.discoveredModels.values());
     if (!agentId) return all;
     return all.filter(m => m.agentId === agentId);
   }

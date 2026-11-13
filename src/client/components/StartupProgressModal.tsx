@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Server, Brain, Cpu, FolderGit2, CheckCircle2, Loader2, AlertCircle, ArrowRight } from 'lucide-react';
+import { Server, Cpu, FolderGit2, CheckCircle2, Loader2, AlertCircle, ArrowRight } from 'lucide-react';
 import { AgentHealthStatus } from '../../shared/types.ts';
 
 interface StartupStage {
@@ -14,7 +14,6 @@ interface StartupStage {
 interface StartupProgressModalProps {
   isOpen: boolean;
   onDismiss: () => void;
-  hindsightConnected: boolean;
   agentHealth: Record<string, AgentHealthStatus>;
   sessionsLoaded: boolean;
   sessionsCount: number;
@@ -23,13 +22,11 @@ interface StartupProgressModalProps {
 export const StartupProgressModal: React.FC<StartupProgressModalProps> = ({
   isOpen,
   onDismiss,
-  hindsightConnected,
   agentHealth,
   sessionsLoaded,
   sessionsCount
 }) => {
   const [serverOk, setServerOk] = useState(false);
-  const [hindsightStatus, setHindsightStatus] = useState<'pending' | 'running' | 'success' | 'warning'>('pending');
   const [isDismissing, setIsDismissing] = useState(false);
 
   // Probe server readiness
@@ -53,62 +50,32 @@ export const StartupProgressModal: React.FC<StartupProgressModalProps> = ({
     };
   }, []);
 
-  // Update Hindsight status
-  useEffect(() => {
-    if (!serverOk) {
-      setHindsightStatus('pending');
-    } else if (hindsightConnected) {
-      setHindsightStatus('success');
-    } else {
-      setHindsightStatus('running');
-      // If after 4s server is ok but hindsight isn't yet connected, mark as warning/background
-      const t = setTimeout(() => {
-        if (!hindsightConnected) {
-          setHindsightStatus('warning');
-        }
-      }, 4000);
-      return () => clearTimeout(t);
-    }
-  }, [serverOk, hindsightConnected]);
-
   const activeAgentsCount = Object.values(agentHealth).filter(a => a.installed).length;
   const totalAgentsCount = Object.keys(agentHealth).length;
 
   const stages: StartupStage[] = [
     {
       id: 'server',
-      label: 'Smith Orchestrator Core',
+      label: 'Smith server',
       description: serverOk ? 'Active on port 4100' : 'Connecting to local backend service...',
       icon: <Server className="w-4 h-4" />,
       status: serverOk ? 'success' : 'running',
       detail: serverOk ? 'HTTP/WS ready' : 'Waiting for /api/v1/health'
     },
     {
-      id: 'hindsight',
-      label: 'Hindsight Memory Daemon',
-      description: hindsightConnected
-        ? 'Vectorized memory engine online'
-        : hindsightStatus === 'warning'
-        ? 'Warming up in background (Python uvx daemon)'
-        : 'Starting Hindsight daemon...',
-      icon: <Brain className="w-4 h-4" />,
-      status: hindsightStatus,
-      detail: hindsightConnected ? 'Connected' : hindsightStatus === 'warning' ? 'Background daemon' : 'Starting...'
-    },
-    {
       id: 'agents',
-      label: 'Agent Runtimes',
+      label: 'Agent CLIs',
       description: totalAgentsCount > 0
-        ? `${activeAgentsCount} of ${totalAgentsCount} CLI runtimes detected`
-        : 'Scanning Claude, Codex, Antigravity...',
+        ? `${activeAgentsCount} of ${totalAgentsCount} agent CLIs found`
+        : 'Looking for Claude Code, Codex and OpenCode…',
       icon: <Cpu className="w-4 h-4" />,
       status: totalAgentsCount > 0 ? 'success' : 'running',
       detail: totalAgentsCount > 0 ? `${activeAgentsCount} ready` : 'Probing...'
     },
     {
       id: 'sessions',
-      label: 'Workspace & Chat Store',
-      description: sessionsLoaded ? `${sessionsCount} session(s) loaded from disk` : 'Reading ~/.smith/chats...',
+      label: 'Sessions',
+      description: sessionsLoaded ? `${sessionsCount} session(s) loaded from disk` : 'Reading ~/.smith…',
       icon: <FolderGit2 className="w-4 h-4" />,
       status: sessionsLoaded ? 'success' : 'running',
       detail: sessionsLoaded ? 'Loaded' : 'Reading...'
@@ -142,7 +109,7 @@ export const StartupProgressModal: React.FC<StartupProgressModalProps> = ({
             </div>
             <div>
               <h2 className="text-sm font-semibold text-zinc-100">Starting Smith</h2>
-              <p className="text-xs text-zinc-400">Initializing desktop environment & services</p>
+              <p className="text-xs text-zinc-400">Connecting to the local server</p>
             </div>
           </div>
           <span className="text-xs font-mono text-zinc-500">{progressPct}%</span>

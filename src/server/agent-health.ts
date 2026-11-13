@@ -9,10 +9,9 @@ export class AgentHealthEngine {
   constructor() {
     const now = Date.now();
     const defaults: Record<AgentId, AgentHealthStatus> = {
-      claude: { agentId: 'claude', name: 'Claude Code', installed: true, authenticated: true, status: 'ready', message: 'Ready', lastCheckedAt: now },
-      antigravity: { agentId: 'antigravity', name: 'Google Antigravity', installed: true, authenticated: true, status: 'ready', message: 'Ready', lastCheckedAt: now },
-      codex: { agentId: 'codex', name: 'OpenAI Codex', installed: true, authenticated: true, status: 'ready', message: 'Ready', lastCheckedAt: now },
-      opencode: { agentId: 'opencode', name: 'OpenCode', installed: true, authenticated: true, status: 'ready', message: 'Ready', lastCheckedAt: now }
+      claude: { agentId: 'claude', name: 'Claude Code', installed: true, authenticated: true, status: 'ready', message: 'Checking…', lastCheckedAt: now },
+      codex: { agentId: 'codex', name: 'OpenAI Codex', installed: true, authenticated: true, status: 'ready', message: 'Checking…', lastCheckedAt: now },
+      opencode: { agentId: 'opencode', name: 'OpenCode', installed: true, authenticated: true, status: 'ready', message: 'Checking…', lastCheckedAt: now }
     };
     for (const [id, s] of Object.entries(defaults)) {
       this.cache.set(id as AgentId, s);
@@ -29,7 +28,6 @@ export class AgentHealthEngine {
     try {
       await Promise.allSettled([
         this.probeAgent('claude'),
-        this.probeAgent('antigravity'),
         this.probeAgent('codex'),
         this.probeAgent('opencode')
       ]);

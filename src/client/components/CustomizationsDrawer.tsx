@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { X, Sliders, Check, Wrench, Layers, Shield, Bot } from 'lucide-react';
-import { SessionCustomizations, Skill, CustomMCPServer, Plugin, ObserverConfig, OrchestratorConfig, AgentId, DiscoveredModel } from '../../shared/types.ts';
+import { X, Sliders, Check, Wrench, Layers } from 'lucide-react';
+import { SessionCustomizations, Skill, CustomMCPServer, Plugin, DiscoveredModel } from '../../shared/types.ts';
 
 interface CustomizationsDrawerProps {
   isOpen: boolean;
@@ -27,40 +27,6 @@ export const CustomizationsDrawer: React.FC<CustomizationsDrawerProps> = ({
 }) => {
   const [selectedSkills, setSelectedSkills] = useState<string[]>(customizations.skills || []);
   const [selectedMCPs, setSelectedMCPs] = useState<Record<string, CustomMCPServer>>(customizations.mcpServers || {});
-  
-  const isAgentAvailable = (agentId: string): { available: boolean; label?: string } => {
-    const health = agentHealth?.[agentId];
-    if (!health) {
-      if (agentId === 'opencode') return { available: false, label: 'Not Installed' };
-      return { available: true };
-    }
-    if (!health.installed || health.status === 'not_installed') {
-      return { available: false, label: 'Not Installed' };
-    }
-    if (health.status === 'error') {
-      return { available: false, label: 'Misconfigured' };
-    }
-    return { available: true };
-  };
-
-  // Lead Orchestrator Configuration
-  const [orchestratorAgent, setOrchestratorAgent] = useState<AgentId>((customizations.orchestrator?.agentId as AgentId) || 'antigravity');
-  const [orchestratorModels, setOrchestratorModels] = useState<Record<string, string>>({
-    antigravity: customizations.orchestrator?.agentId === 'antigravity' ? customizations.orchestrator?.model : 'gemini-4-argon',
-    claude: customizations.orchestrator?.agentId === 'claude' ? customizations.orchestrator?.model : 'claude-opus-5-5',
-    codex: customizations.orchestrator?.agentId === 'codex' ? customizations.orchestrator?.model : 'gpt-6.1-sol',
-    opencode: customizations.orchestrator?.agentId === 'opencode' ? customizations.orchestrator?.model : 'gemini-4-argon'
-  });
-
-  // Observer Agent Configuration
-  const [observerAgent, setObserverAgent] = useState<AgentId>((customizations.observer?.agentId as AgentId) || 'antigravity');
-  const [observerModels, setObserverModels] = useState<Record<string, string>>({
-    antigravity: customizations.observer?.agentId === 'antigravity' ? customizations.observer?.model : 'gemini-4-argon',
-    claude: customizations.observer?.agentId === 'claude' ? customizations.observer?.model : 'claude-opus-5-5',
-    codex: customizations.observer?.agentId === 'codex' ? customizations.observer?.model : 'gpt-6.1-sol',
-    opencode: customizations.observer?.agentId === 'opencode' ? customizations.observer?.model : 'gemini-4-argon'
-  });
-  const [observerEnabled, setObserverEnabled] = useState<boolean>(customizations.observer?.enabled ?? true);
 
   if (!isOpen) return null;
 
@@ -86,16 +52,7 @@ export const CustomizationsDrawer: React.FC<CustomizationsDrawerProps> = ({
   const handleApply = () => {
     onApplyChanges({
       skills: selectedSkills,
-      mcpServers: selectedMCPs,
-      orchestrator: {
-        agentId: orchestratorAgent,
-        model: orchestratorModels[orchestratorAgent] || 'gemini-4-argon'
-      },
-      observer: {
-        agentId: observerAgent,
-        model: observerModels[observerAgent] || 'gemini-4-argon',
-        enabled: observerEnabled
-      }
+      mcpServers: selectedMCPs
     });
     onClose();
   };
@@ -111,7 +68,7 @@ export const CustomizationsDrawer: React.FC<CustomizationsDrawerProps> = ({
               <Sliders className="w-4 h-4 text-zinc-300" />
               <div>
                 <h2 className="text-sm font-semibold text-zinc-100">Customizations</h2>
-                <p className="text-[11px] text-zinc-400">Hot-update orchestrator lead, skills, MCPs & observer</p>
+                <p className="text-[11px] text-zinc-400">Team conventions and extra tools; they apply from each worker's next turn</p>
               </div>
             </div>
             <button onClick={onClose} className="p-1 rounded text-zinc-400 hover:text-zinc-200">
@@ -121,78 +78,6 @@ export const CustomizationsDrawer: React.FC<CustomizationsDrawerProps> = ({
 
           {/* Body */}
           <div className="flex-1 overflow-y-auto p-4 space-y-5 text-xs">
-            {/* Lead Orchestrator Agent Section */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-semibold text-xs text-zinc-300 flex items-center gap-1.5">
-                  <Bot className="w-3.5 h-3.5 text-sky-400" /> Lead Orchestrator Agent
-                </span>
-                <span className="text-[11px] text-zinc-500 font-mono">Conductor & Planner</span>
-              </div>
-
-              <div className="space-y-1.5">
-                {(['antigravity', 'claude', 'codex', 'opencode'] as AgentId[]).map(agentId => {
-                  const isSelected = orchestratorAgent === agentId;
-                  const agentModels = availableModels.filter(m => m.agentId === agentId);
-                  const currentModel = orchestratorModels[agentId] || (agentId === 'antigravity' ? 'gemini-4-argon' : agentId === 'claude' ? 'claude-opus-5-5' : agentId === 'codex' ? 'gpt-6.1-sol' : 'gemini-4-argon');
-                  const avail = isAgentAvailable(agentId);
-
-                  return (
-                    <div
-                      key={`drawer-orch-${agentId}`}
-                      onClick={() => avail.available && setOrchestratorAgent(agentId)}
-                      className={`p-2 rounded-lg border flex items-center justify-between gap-2 transition-colors ${
-                        !avail.available
-                          ? 'bg-zinc-950/20 border-zinc-800/40 opacity-40 cursor-not-allowed'
-                          : isSelected
-                          ? 'bg-zinc-950 border-sky-500/60 shadow-sm cursor-pointer'
-                          : 'bg-zinc-950/40 border-zinc-800/60 opacity-60 hover:opacity-90 cursor-pointer'
-                      }`}
-                    >
-                      <label className={`flex items-center gap-2 ${avail.available ? 'cursor-pointer' : 'cursor-not-allowed'}`} onClick={e => e.stopPropagation()}>
-                        <input
-                          type="radio"
-                          name="drawerOrchestratorAgent"
-                          disabled={!avail.available}
-                          checked={isSelected}
-                          onChange={() => setOrchestratorAgent(agentId)}
-                          className="rounded-full border-zinc-700 bg-zinc-800 text-sky-500 focus:ring-0 disabled:opacity-30"
-                        />
-                        <span className="font-medium text-zinc-200 capitalize">{agentId}</span>
-                        {agentId === 'antigravity' && (
-                          <span className="text-[10px] text-zinc-500 font-mono">(Default Lead)</span>
-                        )}
-                        {!avail.available && (
-                          <span className="text-[10px] text-rose-400 font-mono">({avail.label})</span>
-                        )}
-                      </label>
-
-                      {isSelected && avail.available && (
-                        <select
-                          value={currentModel}
-                          onChange={e => {
-                            e.stopPropagation();
-                            const val = e.target.value;
-                            setOrchestratorModels(prev => ({ ...prev, [agentId]: val }));
-                          }}
-                          onClick={e => e.stopPropagation()}
-                          className="bg-zinc-900 border border-sky-500/50 rounded px-2 py-1 text-[11px] font-mono text-sky-300 focus:outline-none"
-                        >
-                          {agentModels.length > 0 ? (
-                            agentModels.map(m => (
-                              <option key={m.id} value={m.id}>{m.id}</option>
-                            ))
-                          ) : (
-                            <option value={currentModel}>{currentModel}</option>
-                          )}
-                        </select>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
             {/* Skills Section */}
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -233,7 +118,7 @@ export const CustomizationsDrawer: React.FC<CustomizationsDrawerProps> = ({
                 <span className="font-semibold text-xs text-zinc-300 flex items-center gap-1.5">
                   <Wrench className="w-3.5 h-3.5 text-zinc-400" /> MCP Servers
                 </span>
-                <span className="text-[11px] text-zinc-500">Auto Hot-Reloaded</span>
+                <span className="text-[11px] text-zinc-500">Claude Code and OpenCode workers</span>
               </div>
               <div className="space-y-1.5">
                 {allMCPs.map(mcp => {
@@ -256,86 +141,6 @@ export const CustomizationsDrawer: React.FC<CustomizationsDrawerProps> = ({
                       }`}>
                         {isEnabled && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Observer Agent Harness */}
-            <div className="pt-2 border-t border-zinc-800/80">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-semibold text-xs text-zinc-300 flex items-center gap-1.5">
-                  <Shield className="w-3.5 h-3.5 text-emerald-400" /> Observer Agent Harness
-                </span>
-                <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-zinc-400">
-                  <input
-                    type="checkbox"
-                    checked={observerEnabled}
-                    onChange={e => setObserverEnabled(e.target.checked)}
-                    className="rounded border-zinc-700 bg-zinc-800 text-emerald-500 focus:ring-0"
-                  />
-                  <span>Active</span>
-                </label>
-              </div>
-
-              <div className="space-y-1.5">
-                {(['antigravity', 'claude', 'codex', 'opencode'] as AgentId[]).map(agentId => {
-                  const isSelected = observerAgent === agentId;
-                  const agentModels = availableModels.filter(m => m.agentId === agentId);
-                  const currentModel = observerModels[agentId] || (agentId === 'antigravity' ? 'gemini-4-argon' : agentId === 'claude' ? 'claude-opus-5-5' : agentId === 'codex' ? 'gpt-6.1-sol' : 'gemini-4-argon');
-                  const avail = isAgentAvailable(agentId);
-
-                  return (
-                    <div
-                      key={`obs-drawer-${agentId}`}
-                      onClick={() => observerEnabled && avail.available && setObserverAgent(agentId)}
-                      className={`p-2 rounded-lg border flex items-center justify-between gap-2 transition-colors ${
-                        !observerEnabled || !avail.available
-                          ? 'bg-zinc-950/20 border-zinc-800/40 opacity-40 cursor-not-allowed'
-                          : isSelected
-                          ? 'bg-zinc-950 border-emerald-500/60 shadow-sm cursor-pointer'
-                          : 'bg-zinc-950/40 border-zinc-800/60 opacity-60 hover:opacity-90 cursor-pointer'
-                      }`}
-                    >
-                      <label className={`flex items-center gap-2 ${observerEnabled && avail.available ? 'cursor-pointer' : 'cursor-not-allowed'}`} onClick={e => e.stopPropagation()}>
-                        <input
-                          type="radio"
-                          name="drawerObserverAgent"
-                          disabled={!observerEnabled || !avail.available}
-                          checked={isSelected}
-                          onChange={() => setObserverAgent(agentId)}
-                          className="rounded-full border-zinc-700 bg-zinc-800 text-emerald-500 focus:ring-0 disabled:opacity-30"
-                        />
-                        <span className="font-medium text-zinc-200 capitalize">{agentId}</span>
-                        {agentId === 'antigravity' && (
-                          <span className="text-[10px] text-zinc-500 font-mono">(Argon default)</span>
-                        )}
-                        {!avail.available && (
-                          <span className="text-[10px] text-rose-400 font-mono">({avail.label})</span>
-                        )}
-                      </label>
-
-                      {isSelected && observerEnabled && avail.available && (
-                        <select
-                          value={currentModel}
-                          onChange={e => {
-                            e.stopPropagation();
-                            const val = e.target.value;
-                            setObserverModels(prev => ({ ...prev, [agentId]: val }));
-                          }}
-                          onClick={e => e.stopPropagation()}
-                          className="bg-zinc-900 border border-emerald-500/50 rounded px-2 py-1 text-[11px] font-mono text-emerald-300 focus:outline-none"
-                        >
-                          {agentModels.length > 0 ? (
-                            agentModels.map(m => (
-                              <option key={m.id} value={m.id}>{m.id}</option>
-                            ))
-                          ) : (
-                            <option value={currentModel}>{currentModel}</option>
-                          )}
-                        </select>
-                      )}
                     </div>
                   );
                 })}

@@ -19,7 +19,6 @@ cask "smith" do
   depends_on formula: [
     "git",
     "node@22",
-    "uv",
   ]
 
   app "Smith.app"

@@ -148,8 +148,7 @@ export class WorktreeManager {
   async getDiffSummary(
     worktreePath: string,
     branch: string,
-    baseBranch: string = 'main',
-    touchedFileScopes: string[] = []
+    baseBranch: string = 'main'
   ): Promise<WorktreeDiffSummary> {
     const files: WorktreeDiffFile[] = [];
     let totalAdditions = 0;
@@ -195,30 +194,6 @@ export class WorktreeManager {
       // Ignore git command error
     }
 
-    // In test environment, if no actual git diff was found, provide representative test summary
-    if (files.length === 0 && (process.env.VITEST || process.env.NODE_ENV === 'test')) {
-      if (touchedFileScopes.length > 0) {
-        for (const scope of touchedFileScopes) {
-          const adds = 35;
-          const dels = 2;
-          totalAdditions += adds;
-          totalDeletions += dels;
-          files.push({
-            file: scope,
-            additions: adds,
-            deletions: dels,
-            status: 'modified'
-          });
-        }
-      } else {
-        files.push({ file: 'src/services/handler.ts', additions: 42, deletions: 4, status: 'modified' });
-        files.push({ file: 'src/types/models.ts', additions: 18, deletions: 0, status: 'added' });
-        files.push({ file: 'tests/service.test.ts', additions: 36, deletions: 1, status: 'added' });
-        totalAdditions = 96;
-        totalDeletions = 5;
-      }
-    }
-
     return {
       branch,
       baseBranch,
@@ -253,16 +228,6 @@ export class WorktreeManager {
     baseBranch: string;
     message: string;
   }> {
-    if (process.env.NODE_ENV === 'test' || path.resolve(repoPath) === path.resolve(process.cwd())) {
-      const mockSha = Math.random().toString(16).substring(2, 9);
-      return {
-        success: true,
-        commit: mockSha,
-        branch,
-        baseBranch,
-        message: 'Worktree changes merged cleanly into ' + baseBranch + ' (commit ' + mockSha + ').'
-      };
-    }
     try {
       assertSafeRef(branch, 'branch name');
       assertSafeRef(baseBranch, 'base branch');
@@ -318,13 +283,6 @@ export class WorktreeManager {
     branch: string;
     message: string;
   }> {
-    if (process.env.NODE_ENV === 'test' || path.resolve(worktreePath) === path.resolve(process.cwd()) || !worktreePath.includes('.worktrees')) {
-      return {
-        success: true,
-        branch,
-        message: `Changes on branch ${branch} discarded.`
-      };
-    }
     try {
       // reset/clean are destructive: only ever run them inside the session's own worktree.
       if (await this.isWorktreeRoot(worktreePath)) {
@@ -357,6 +315,128 @@ export class WorktreeManager {
         fs.rmSync(worktreePath, { recursive: true, force: true });
       }
       return true;
+    }
+  }
+
+  // ---- Per-card worktrees (docs/designs/peer-board.md, section 9) --------------------------
+
+  private cardWorktreeDir(repoPath: string, cardBranch: string): string {
+    return path.join(repoPath, '.worktrees', cardBranch.replace(/[^a-zA-Z0-9_-]/g, '-'));
+  }
+
+  /**
+   * Creates (or reuses) the branch and worktree a card is worked on in. Unlike the session
+   * worktree there is no plain-folder fallback: without a real worktree the card's diff could
+   * not be checked against its scope.
+   */
+  async createCardWorktree(repoPath: string, cardBranch: string, fromRef: string): Promise<string> {
+    assertSafeRef(cardBranch, 'card branch');
+    assertSafeRef(fromRef, 'base ref');
+    const dir = this.cardWorktreeDir(repoPath, cardBranch);
+    if (await this.isWorktreeRoot(dir)) return dir;
+    fs.mkdirSync(path.dirname(dir), { recursive: true });
+    try {
+      await this.runGit(['worktree', 'add', '-b', cardBranch, dir, fromRef], repoPath);
+    } catch {
+      // The branch exists already (the card was claimed before and its worktree was removed).
+      await this.runGit(['worktree', 'prune'], repoPath);
+      await this.runGit(['worktree', 'add', dir, cardBranch], repoPath);
+    }
+    return dir;
+  }
+
+  /** Commits everything in a worktree. Returns the HEAD commit, whether or not anything changed. */
+  async commitAll(worktreePath: string, message: string): Promise<string> {
+    if (!(await this.isWorktreeRoot(worktreePath))) {
+      throw new Error(`${worktreePath} is not a git worktree`);
+    }
+    await this.runGit(['add', '-A'], worktreePath);
+    const { stdout: staged } = await this.runGit(['status', '--porcelain'], worktreePath);
+    if (staged.trim()) {
+      await this.runGit(['commit', '--no-verify', '-m', message], worktreePath);
+    }
+    const { stdout } = await this.runGit(['rev-parse', '--short', 'HEAD'], worktreePath);
+    return stdout.trim();
+  }
+
+  /** Files and line count a branch changes relative to where it left `baseRef`. */
+  async diffStat(worktreePath: string, baseRef: string): Promise<{ files: string[]; lines: number }> {
+    assertSafeRef(baseRef, 'base ref');
+    const { stdout } = await this.runGit(['diff', '--numstat', `${baseRef}...HEAD`], worktreePath);
+    const files: string[] = [];
+    let lines = 0;
+    for (const line of stdout.split('\n')) {
+      const parts = line.split('\t');
+      if (parts.length < 3) continue;
+      lines += (parseInt(parts[0], 10) || 0) + (parseInt(parts[1], 10) || 0);
+      files.push(parts.slice(2).join('\t'));
+    }
+    return { files, lines };
+  }
+
+  async diffText(worktreePath: string, baseRef: string, maxChars: number = 60000): Promise<string> {
+    assertSafeRef(baseRef, 'base ref');
+    try {
+      const { stdout } = await this.runGit(['diff', `${baseRef}...HEAD`], worktreePath);
+      return stdout.length > maxChars
+        ? stdout.slice(0, maxChars) + `\n… [diff truncated at ${maxChars} characters; read the files in the worktree for the rest]`
+        : stdout;
+    } catch (err: any) {
+      return `(diff unavailable: ${err.message})`;
+    }
+  }
+
+  /**
+   * Merges a card branch into the session branch, inside the session worktree. A conflicting
+   * merge is aborted and its files are reported so a peer can resolve them on a card.
+   */
+  async mergeCardBranch(
+    sessionWorktree: string,
+    cardBranch: string,
+    message: string
+  ): Promise<{ ok: true; commit: string } | { ok: false; files: string[]; error: string }> {
+    assertSafeRef(cardBranch, 'card branch');
+    if (!(await this.isWorktreeRoot(sessionWorktree))) {
+      return { ok: false, files: [], error: `${sessionWorktree} is not a git worktree` };
+    }
+    // Anything left uncommitted in the session worktree would make the merge refuse to start.
+    await this.commitAll(sessionWorktree, 'chore: save uncommitted session changes');
+    try {
+      await this.runGit(['merge', '--no-ff', '--no-verify', cardBranch, '-m', message], sessionWorktree);
+    } catch (err: any) {
+      let files: string[] = [];
+      try {
+        const { stdout } = await this.runGit(['diff', '--name-only', '--diff-filter=U'], sessionWorktree);
+        files = stdout.split('\n').filter(Boolean);
+      } catch {}
+      try {
+        await this.runGit(['merge', '--abort'], sessionWorktree);
+      } catch {}
+      return { ok: false, files, error: String(err.stdout || err.stderr || err.message || '').trim() };
+    }
+    const { stdout } = await this.runGit(['rev-parse', '--short', 'HEAD'], sessionWorktree);
+    return { ok: true, commit: stdout.trim() };
+  }
+
+  /** Brings the session branch into a card worktree, leaving any conflict markers for a peer to resolve. */
+  async startConflictResolution(cardWorktree: string, sessionBranch: string): Promise<void> {
+    assertSafeRef(sessionBranch, 'session branch');
+    if (!(await this.isWorktreeRoot(cardWorktree))) return;
+    try {
+      await this.runGit(['merge', '--no-verify', sessionBranch, '-m', `Merge ${sessionBranch} to resolve conflicts`], cardWorktree);
+    } catch {
+      // Expected: the conflict is now in the working tree.
+    }
+  }
+
+  async removeCardWorktree(repoPath: string, worktreePath: string, cardBranch?: string): Promise<void> {
+    await this.removeWorktree(repoPath, worktreePath);
+    if (cardBranch) {
+      try {
+        await this.runGit(['branch', '-D', assertSafeRef(cardBranch, 'card branch')], repoPath);
+      } catch {
+        // Branch already gone
+      }
     }
   }
 }

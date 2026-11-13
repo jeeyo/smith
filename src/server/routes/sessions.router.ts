@@ -1,84 +1,90 @@
 import { Router } from 'express';
-import fs from 'node:fs';
-import path from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
-import { config } from '../config.ts';
-import { Session, SessionCreateInput, ObserverConfig, OrchestratorConfig, Task } from '../../shared/types.ts';
+import { Session, SessionAgentConfig, SessionCreateInput } from '../../shared/types.ts';
+import { ReviewMode, Tier } from '../../shared/board.ts';
 import { worktreeManager } from '../worktree-manager.ts';
-import { hindsightService } from '../hindsight-service.ts';
-import { taskLeaseManager } from '../task-lease-manager.ts';
 import { costEngine } from '../cost-engine.ts';
-import { mcpGateway } from '../mcp-gateway.ts';
-import { acpHostEngine } from '../acp-host.ts';
-import { observerAgentService } from '../observer-agent.ts';
+import { sessionStore, getSession } from '../session-store.ts';
+import { boardStore } from '../board-store.ts';
+import { boardTools } from '../board-tools.ts';
+import { sessionChat } from '../session-chat.ts';
+import { scheduler } from '../scheduler.ts';
+import { startGoal, syncPeers } from '../team.ts';
+import { isHarness } from '../adapters/index.ts';
 
 export const sessionsRouter = Router();
+export { getSession };
 
-const sessionsMap: Map<string, Session> = new Map();
-const sessionsStorageDir = path.join(config.storageDir, 'sessions');
+const REVIEW_MODES: ReviewMode[] = ['fast', 'normal', 'thorough'];
 
-if (!fs.existsSync(sessionsStorageDir)) {
-  fs.mkdirSync(sessionsStorageDir, { recursive: true });
+/** Suggests a tier from a model name; the user can change it. */
+export function suggestTier(model: string): Tier {
+  const m = (model || '').toLowerCase();
+  if (/haiku|mini|nano|lite|flash|small|ollama|local|qwen|deepseek|llama/.test(m)) return 1;
+  if (/opus|fable|mythos|ultra|\bo1\b|\bo3\b|pro\b|gpt-5|gpt-6/.test(m)) return 3;
+  return 2;
 }
 
-function saveSession(session: Session) {
-  fs.writeFileSync(
-    path.join(sessionsStorageDir, `${session.id}.json`),
-    JSON.stringify(session, null, 2)
-  );
-}
-
-// Load existing persisted sessions
-try {
-  const files = fs.readdirSync(sessionsStorageDir);
-  for (const file of files) {
-    if (!file.endsWith('.json')) continue;
-    // One unreadable file must not hide every other session.
-    try {
-      const data = JSON.parse(fs.readFileSync(path.join(sessionsStorageDir, file), 'utf-8'));
-      if (data?.id) sessionsMap.set(data.id, data);
-    } catch (err) {
-      console.warn(`Skipping unreadable session file ${file}:`, err);
-    }
+/** Builds the worker map, giving each worker a unique peer id such as "claude-1". */
+function buildWorkers(agents: SessionAgentConfig[] | undefined): Session['agents'] {
+  const workers: Session['agents'] = {};
+  const counts: Record<string, number> = {};
+  for (const cfg of agents || []) {
+    if (!cfg || !isHarness(cfg.agentId) || !cfg.model) continue;
+    counts[cfg.agentId] = (counts[cfg.agentId] || 0) + 1;
+    let id = (cfg.workerId || '').trim().replace(/[^a-zA-Z0-9_-]/g, '-');
+    if (!id || workers[id]) id = `${cfg.agentId}-${counts[cfg.agentId]}`;
+    while (workers[id]) id = `${id}-x`;
+    const tier = [1, 2, 3].includes(cfg.tier as number) ? (cfg.tier as Tier) : suggestTier(cfg.model);
+    workers[id] = { config: { workerId: id, agentId: cfg.agentId, model: cfg.model, tier } };
   }
-} catch {
-  // Empty
+  return workers;
 }
 
-export function getSession(id: string): Session | undefined {
-  return sessionsMap.get(id);
+function withCost(session: Session) {
+  const cost = costEngine.getSessionCost(session.id);
+  return {
+    ...session,
+    cost: {
+      currency: 'USD' as const,
+      inputCostUsd: 0,
+      outputCostUsd: 0,
+      cachedCostUsd: 0,
+      totalCostUsd: cost.totalCostUsd,
+      formattedTotal: cost.formattedTotal
+    }
+  };
 }
 
-sessionsRouter.get('/sessions', (req, res) => {
-  const list = Array.from(sessionsMap.values()).map(s => {
-    const costSummary = costEngine.getSessionCost(s.id);
-    return {
-      ...s,
-      cost: {
-        currency: 'USD' as const,
-        inputCostUsd: 0,
-        outputCostUsd: 0,
-        cachedCostUsd: 0,
-        totalCostUsd: costSummary.totalCostUsd,
-        formattedTotal: costSummary.formattedTotal
-      }
-    };
-  }).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+async function removeSession(session: Session) {
+  try {
+    await boardTools.dropAllWorkspaces(session);
+  } catch {}
+  try {
+    await worktreeManager.removeWorktree(session.repoPath, session.worktree.path);
+  } catch {}
+  scheduler.forget(session.id);
+  boardStore.delete(session.id);
+  sessionChat.forget(session.id);
+  sessionStore.delete(session.id);
+}
+
+sessionsRouter.get('/sessions', (_req, res) => {
+  const list = sessionStore.list().map(withCost);
   res.json({ count: list.length, sessions: list });
 });
 
 sessionsRouter.post('/sessions', async (req, res) => {
-  const input: SessionCreateInput = req.body;
+  const input: SessionCreateInput = req.body || {};
   if (!input.name || !input.repoPath) {
     return res.status(400).json({ error: 'name and repoPath are required' });
   }
 
-  const macroGoal = input.macroGoal || '';
   const sessionId = `smith-${Date.now()}-${uuidv4().substring(0, 6)}`;
-  const branchName = `smith/${input.name.toLowerCase().replace(/[^a-z0-9_-]/g, '-')}`;
-  const bankId = `bank-${sessionId}`;
+  const slug = input.name.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'session';
+  // The id suffix keeps two sessions with the same name on separate branches.
+  const branchName = `smith/${slug}-${sessionId.slice(-6)}`;
 
-  // 1. Create isolated Git worktree
   let worktree;
   try {
     worktree = await worktreeManager.createWorktree(input.repoPath, branchName, input.baseBranch || 'main');
@@ -86,181 +92,75 @@ sessionsRouter.post('/sessions', async (req, res) => {
     return res.status(400).json({ error: err.message });
   }
 
-  // 2. Ensure Hindsight memory bank exists
-  await hindsightService.ensureBank(bankId);
-  const retainNote = macroGoal
-    ? `[Session Created] ${input.name}. Macro Goal: ${macroGoal}`
-    : `[Session Created] ${input.name}. Isolated worktree branch: ${branchName}`;
-  await hindsightService.retain(bankId, retainNote, {
-    category: 'decision'
-  });
-
-  // 3. Configure customizations, observer harness & orchestrator agent
-  const orchestratorConfig: OrchestratorConfig = input.orchestrator || {
-    agentId: 'antigravity',
-    model: 'gemini-2.5-pro'
-  };
-  const observerConfig: ObserverConfig = input.observer || {
-    agentId: 'antigravity',
-    model: 'gemini-2.5-pro',
-    enabled: true
-  };
-  const customizations = {
-    plugins: input.plugins || [],
-    skills: input.skills || ['code-review'],
-    mcpServers: (input.customMcpServers || []).reduce((acc, s) => {
-      acc[s.id] = s;
-      return acc;
-    }, {} as any),
-    observer: observerConfig,
-    orchestrator: orchestratorConfig
-  };
-  mcpGateway.setSessionCustomizations(sessionId, customizations);
-  observerAgentService.setSessionConfig(sessionId, observerConfig);
-
-  // 4. Initialize Session agents (supports multiple workers per agent)
-  const agentsMap: Record<string, any> = {};
-  for (let idx = 0; idx < (input.agents || []).length; idx++) {
-    const agentCfg = input.agents[idx];
-    const workerKey = agentCfg.workerId || (agentsMap[agentCfg.agentId] ? `${agentCfg.agentId}-${idx + 1}` : agentCfg.agentId);
-    agentsMap[workerKey] = {
-      config: { ...agentCfg, workerId: workerKey },
-      status: 'idle',
-      metrics: {
-        agentId: agentCfg.agentId,
-        model: agentCfg.model,
-        usage: { inputTokens: 0, outputTokens: 0, cachedTokens: 0, reasoningTokens: 0, totalTokens: 0 },
-        cost: { currency: 'USD', inputCostUsd: 0, outputCostUsd: 0, cachedCostUsd: 0, totalCostUsd: 0, formattedTotal: '$0.00' },
-        turnCount: 0,
-        startTime: Date.now(),
-        lastActiveTime: Date.now()
-      }
-    };
-    // Spawn agent in worktree
-    acpHostEngine.spawnAgent(sessionId, agentCfg.agentId, agentCfg.model, worktree.path, workerKey);
-  }
-
-  // 5. Seed initial cooperative task in DAG only if macroGoal is provided
-  const tasks: Record<string, Task> = {};
-  if (macroGoal) {
-    const initialTask = taskLeaseManager.createTask(sessionId, {
-      title: `Phase 1: Architecture & Planning for ${input.name}`,
-      description: `Analyze requirements and implement the primary goal: ${macroGoal}`,
-      fileScope: ['*'],
-      suggestedAgent: input.agents?.[0]?.agentId
-    });
-    tasks[initialTask.id] = initialTask;
-  }
-
   const session: Session = {
     id: sessionId,
     name: input.name,
     repoPath: input.repoPath,
-    macroGoal,
-    bankId,
+    macroGoal: '',
     worktree,
-    agents: agentsMap,
-    customizations,
-    tasks,
+    agents: buildWorkers(input.agents),
+    reviewMode: REVIEW_MODES.includes(input.reviewMode as ReviewMode) ? (input.reviewMode as ReviewMode) : 'normal',
+    customizations: {
+      plugins: input.plugins || [],
+      skills: input.skills || [],
+      mcpServers: (input.customMcpServers || []).reduce((acc, s) => {
+        acc[s.id] = s;
+        return acc;
+      }, {} as Session['customizations']['mcpServers'])
+    },
     createdAt: Date.now(),
-    updatedAt: Date.now(),
-    cost: {
-      currency: 'USD',
-      inputCostUsd: 0,
-      outputCostUsd: 0,
-      cachedCostUsd: 0,
-      totalCostUsd: 0,
-      formattedTotal: '$0.00'
-    }
+    updatedAt: Date.now()
   };
 
-  sessionsMap.set(sessionId, session);
-  saveSession(session);
+  sessionStore.save(session);
+  syncPeers(session);
 
-  res.status(201).json(session);
+  if (input.macroGoal && input.macroGoal.trim() && Object.keys(session.agents).length > 0) {
+    sessionChat.post(session.id, { sender: 'user', kind: 'goal', content: input.macroGoal.trim() });
+    startGoal(session, input.macroGoal);
+  }
+
+  res.status(201).json(withCost(session));
 });
 
 sessionsRouter.get('/sessions/:id', (req, res) => {
-  const session = sessionsMap.get(req.params.id);
+  const session = getSession(req.params.id);
   if (!session) return res.status(404).json({ error: 'Session not found' });
+  res.json(withCost(session));
+});
 
-  const costSummary = costEngine.getSessionCost(session.id);
-  res.json({
-    ...session,
-    tasks: taskLeaseManager.getTasks(session.id),
-    locks: taskLeaseManager.getActiveLocks(session.id),
-    cost: {
-      currency: 'USD',
-      inputCostUsd: 0,
-      outputCostUsd: 0,
-      cachedCostUsd: 0,
-      totalCostUsd: costSummary.totalCostUsd,
-      formattedTotal: costSummary.formattedTotal
-    }
-  });
+/** Replaces the session's workers. Takes effect on the board at once. */
+sessionsRouter.put('/sessions/:id/agents', (req, res) => {
+  const session = getSession(req.params.id);
+  if (!session) return res.status(404).json({ error: 'Session not found' });
+  const agents = req.body?.agents;
+  if (!Array.isArray(agents)) return res.status(400).json({ error: 'agents array required' });
+
+  session.agents = buildWorkers(agents);
+  sessionStore.save(session);
+  syncPeers(session);
+  scheduler.poke(session.id);
+  res.json({ status: 'workers_updated', agents: session.agents });
 });
 
 sessionsRouter.delete('/sessions/:id', async (req, res) => {
-  const session = sessionsMap.get(req.params.id);
+  const session = getSession(req.params.id);
   if (!session) return res.status(404).json({ error: 'Session not found' });
-
-  // Terminate agents
-  for (const agentId of Object.keys(session.agents)) {
-    acpHostEngine.terminateAgent(session.id, agentId);
-  }
-
-  // Remove worktree
-  await worktreeManager.removeWorktree(session.repoPath, session.worktree.path);
-
-  sessionsMap.delete(req.params.id);
-  const filePath = path.join(sessionsStorageDir, `${session.id}.json`);
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
-  }
-  const chatFilePath = path.join(config.storageDir, 'chats', `${session.id}.json`);
-  if (fs.existsSync(chatFilePath)) {
-    try { fs.unlinkSync(chatFilePath); } catch {}
-  }
-
+  await removeSession(session);
   res.json({ status: 'terminated', sessionId: req.params.id });
 });
 
 sessionsRouter.post('/sessions/batch-delete', async (req, res) => {
-  const { sessionIds } = req.body;
+  const { sessionIds } = req.body || {};
   if (!Array.isArray(sessionIds)) {
     return res.status(400).json({ error: 'sessionIds array required' });
   }
-
   const deleted: string[] = [];
   for (const id of sessionIds) {
-    const session = sessionsMap.get(id);
-    if (session) {
-      for (const agentId of Object.keys(session.agents)) {
-        try {
-          acpHostEngine.terminateAgent(session.id, agentId);
-        } catch {}
-      }
-
-      try {
-        await worktreeManager.removeWorktree(session.repoPath, session.worktree.path);
-      } catch {}
-
-      sessionsMap.delete(id);
-      const filePath = path.join(sessionsStorageDir, `${session.id}.json`);
-      if (fs.existsSync(filePath)) {
-        try {
-          fs.unlinkSync(filePath);
-        } catch {}
-      }
-      const chatFilePath = path.join(config.storageDir, 'chats', `${session.id}.json`);
-      if (fs.existsSync(chatFilePath)) {
-        try {
-          fs.unlinkSync(chatFilePath);
-        } catch {}
-      }
-      deleted.push(id);
-    }
+    const session = getSession(id);
+    if (!session) continue;
+    await removeSession(session);
+    deleted.push(id);
   }
-
   res.json({ status: 'batch_deleted', count: deleted.length, deleted });
 });

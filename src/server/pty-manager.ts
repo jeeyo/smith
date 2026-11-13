@@ -14,7 +14,7 @@ export class PTYManager extends EventEmitter {
 
   createPTY(id: string, sessionId: string, cwd: string, shellCmd?: string): PTYSession {
     const isWin = process.platform === 'win32';
-    const shell = shellCmd || (isWin ? 'powershell.exe' : '/bin/bash');
+    const shell = shellCmd || (isWin ? 'powershell.exe' : process.env.SHELL || '/bin/zsh');
 
     const proc = spawn(shell, [], {
       cwd,

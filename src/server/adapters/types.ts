@@ -1,29 +1,41 @@
-import { AgentId, AgentHealthStatus, TokenUsage } from '../../shared/types.ts';
+import { AgentHealthStatus, TokenUsage } from '../../shared/types.ts';
+import { HarnessId } from '../../shared/board.ts';
 
-export interface AdapterExecutionResult {
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-  tokens?: TokenUsage;
+export interface TurnRequest {
+  /** Everything the peer is told for this turn. */
+  prompt: string;
+  /** Directory the CLI starts in. */
+  cwd: string;
+  model: string;
+  /** The board's MCP endpoint and this turn's bearer token. */
+  mcp: { url: string; token: string };
+  timeoutMs: number;
+  /** Extra MCP servers the session enabled, started by the CLI for this turn. */
+  extraMcpServers?: Array<{ id: string; command: string; args: string[]; env?: Record<string, string> }>;
+}
+
+export interface TurnResult {
+  ok: boolean;
+  /** The CLI's final text, for the turn log. */
+  text: string;
+  error?: string;
+  timedOut?: boolean;
+  /** Set when the harness reported that the subscription's usage limit is reached. */
+  usageLimit?: { message: string; resetAt?: number };
+  /** Set when the harness is installed but not logged in. */
+  notLoggedIn?: boolean;
+  /** Real token usage, when the CLI reports it. */
+  usage?: TokenUsage;
   costUsd?: number;
-  isError: boolean;
-  errorMessage?: string;
-  remediation?: string;
 }
 
 export interface AgentAdapter {
-  readonly agentId: AgentId;
+  readonly agentId: HarnessId;
   readonly name: string;
   getBinaryPath(): string;
   isInstalled(): boolean;
+  /** A cheap check that the CLI runs. It must not spend subscription usage. */
   probeHealth(): Promise<AgentHealthStatus>;
-  executePrompt(
-    prompt: string,
-    cwd: string,
-    options?: {
-      timeoutMs?: number;
-      model?: string;
-      taskId?: string;
-    }
-  ): Promise<AdapterExecutionResult>;
+  /** Runs one one-shot turn with the board attached as an MCP server. */
+  runTurn(request: TurnRequest): Promise<TurnResult>;
 }

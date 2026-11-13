@@ -1,13 +1,14 @@
-export type AgentId = 'claude' | 'codex' | 'antigravity' | 'opencode' | 'observer' | string;
+import type { HarnessId, ReviewMode, Tier } from './board.ts';
 
-export type AgentStatus = 'idle' | 'thinking' | 'running_tool' | 'waiting_permission' | 'completed' | 'error';
+/** A harness id ('claude', 'codex', 'opencode') or a peer id such as 'claude-1'. */
+export type AgentId = string;
 
 export interface DiscoveredModel {
   id: string;
   name: string;
   agentId: AgentId;
   provider?: string;
-  source: 'acp-capability' | 'cli-probe' | 'cache' | 'custom';
+  source: 'cli-probe' | 'cache' | 'custom';
   isDefault?: boolean;
   capabilities?: {
     reasoning?: boolean;
@@ -66,51 +67,6 @@ export interface SessionCostSummary {
   }>;
 }
 
-export type TaskStatus = 'unassigned' | 'claimed' | 'in_progress' | 'completed' | 'blocked' | 'error';
-
-export interface Task {
-  id: string;
-  title: string;
-  description: string;
-  status: TaskStatus;
-  assignedAgent?: AgentId;
-  fileScope: string[]; // Glob patterns or file paths locked by this task
-  dependencies: string[]; // IDs of tasks that must complete first
-  delegatedBy?: AgentId;
-  costUsd: number;
-  createdAt: number;
-  completedAt?: number;
-  notes?: string;
-}
-
-export type TeamMessageType =
-  | 'intent'
-  | 'request'
-  | 'hazard'
-  | 'anti_pattern'
-  | 'info'
-  | 'handoff'
-  | 'proposal'
-  | 'consensus'
-  | 'emergency_alert'
-  | 'error_retraction';
-
-export interface TeamMessage {
-  id: string;
-  sender: AgentId | 'user' | 'system';
-  type: TeamMessageType;
-  content: string;
-  timestamp: number;
-  metadata?: {
-    taskId?: string;
-    fileScope?: string[];
-    antiPattern?: {
-      error: string;
-      solution: string;
-    };
-  };
-}
-
 export interface CustomMCPServer {
   id: string;
   name: string;
@@ -139,24 +95,10 @@ export interface Plugin {
   enabled: boolean;
 }
 
-export interface ObserverConfig {
-  agentId: AgentId;
-  model: string;
-  enabled: boolean;
-  strictSpecGamingCheck?: boolean;
-}
-
-export interface OrchestratorConfig {
-  agentId: AgentId;
-  model: string;
-}
-
 export interface SessionCustomizations {
   plugins: string[];
   skills: string[];
   mcpServers: Record<string, CustomMCPServer>;
-  observer?: ObserverConfig;
-  orchestrator?: OrchestratorConfig;
 }
 
 export interface WorktreeInfo {
@@ -168,10 +110,13 @@ export interface WorktreeInfo {
 }
 
 export interface SessionAgentConfig {
+  /** Peer id on the board, for example "claude-1". */
   workerId?: string;
-  agentId: AgentId;
+  /** The harness (agent CLI) this worker runs on. */
+  agentId: HarnessId;
   model: string;
-  mode: 'acp' | 'terminal';
+  /** How capable the model is, 1 to 3. Cards may require a minimum tier. */
+  tier?: Tier;
 }
 
 export interface Session {
@@ -179,20 +124,15 @@ export interface Session {
   name: string;
   repoPath: string;
   macroGoal: string;
-  bankId: string; // Hindsight bank
   worktree: WorktreeInfo;
-  agents: Record<string, {
-    config: SessionAgentConfig;
-    status: AgentStatus;
-    metrics: AgentMetrics;
-    ptyId?: string;
-    activeTaskId?: string;
-  }>;
+  agents: Record<string, { config: SessionAgentConfig }>;
+  reviewMode: ReviewMode;
+  /** The approved spec the current goal was started from. */
+  specPath?: string;
   customizations: SessionCustomizations;
-  tasks: Record<string, Task>;
   createdAt: number;
   updatedAt: number;
-  cost: CostBreakdown;
+  cost?: CostBreakdown;
 }
 
 export interface SessionCreateInput {
@@ -201,45 +141,10 @@ export interface SessionCreateInput {
   baseBranch?: string;
   macroGoal?: string;
   agents: SessionAgentConfig[];
+  reviewMode?: ReviewMode;
   plugins?: string[];
   skills?: string[];
   customMcpServers?: CustomMCPServer[];
-  observer?: ObserverConfig;
-  orchestrator?: OrchestratorConfig;
-}
-
-export interface ACPPermissionRequest {
-  id: string;
-  agentId: AgentId;
-  tool: string;
-  parameters: Record<string, any>;
-  description: string;
-  timestamp: number;
-}
-
-export interface HindsightFact {
-  id: string;
-  text: string;
-  category?: 'architecture' | 'decision' | 'environment' | 'general';
-  createdAt: number;
-}
-
-export interface HindsightExperience {
-  id: string;
-  agentId: AgentId;
-  action: string;
-  diffSummary?: string;
-  outcome: 'success' | 'failure';
-  timestamp: number;
-}
-
-export interface HindsightAntiPattern {
-  id: string;
-  error: string;
-  context: string;
-  solution: string;
-  agentId: AgentId;
-  timestamp: number;
 }
 
 export interface AgentHealthStatus {
@@ -290,116 +195,20 @@ export interface MessageArtifact {
   description?: string;
 }
 
-export interface ObserverAuditRecord {
-  id: string;
-  timestamp: number;
-  sessionId: string;
-  phaseOrTaskId?: string;
-  targetAgent: AgentId;
-  observerAgentId?: AgentId;
-  observerModel?: string;
-  verdict: 'verified' | 'flagged' | 'hallucination_detected' | 'spec_gaming_detected';
-  confidence: number;
-  summary: string;
-  milestonesVerified: string[];
-  findings: string[];
-  groundTruthCheck: {
-    filesVerified: string[];
-    missingFiles: string[];
-    testsExecuted: boolean;
-    testsPassed: boolean;
-    specGamingSigns: string[];
-  };
-}
-
-export interface DualLayerMemoryInfo {
-  sessionId: string;
-  basePath: string; // .smith/memory/sessions/{sessionId}
-  teamKnowledgeFile: string; // .smith/memory/sessions/{sessionId}/team/knowledge.md
-  agentScratchpadFiles: Record<string, string>; // .smith/memory/sessions/{sessionId}/agents/{agentId}/scratchpad.md
-  lastCompactionAt?: number;
-  teamKnowledgeContent?: string;
-  agentScratchpads?: Record<string, string>;
-}
-
-export interface InteractiveQuestion {
-  id: string;
-  askingAgent: AgentId | 'orchestrator';
-  askingModel?: string;
-  prompt: string;
-  context?: string;
-  options: string[];
-  isMultiSelect?: boolean;
-  allowCustom?: boolean;
-  answered?: boolean;
-  selectedOptions?: string[];
-  customAnswer?: string;
-  answeredAt?: number;
-}
-
 export interface GoalChatMessage {
   id: string;
-  sender: 'user' | 'orchestrator' | 'system' | 'agent';
-  agentId?: AgentId | string;
-  acpMode?: 'plan' | 'exec' | 'chat';
+  sender: 'user' | 'board' | 'system';
+  /** What the message is about, so the UI can render it appropriately. */
+  kind?: 'goal' | 'info' | 'question' | 'answer' | 'paused' | 'completed' | 'error';
   content: string;
   timestamp: number;
-  orchestratorAgentId?: AgentId;
-  orchestratorModel?: string;
-  questions?: InteractiveQuestion[];
-  status?: 'planning' | 'awaiting_approval' | 'executing' | 'completed' | 'error';
-  warnings?: Array<{
-    agentId: string;
-    type: 'rate_limit' | 'auth_required' | 'delegated' | 'warning';
-    title: string;
-    message: string;
-    remediation?: string;
-  }>;
-  plan?: {
-    goal: string;
-    isDelta?: boolean;
-    deltaScope?: string[];
-    subtasks: Array<{
-      id: string;
-      title: string;
-      agentId: AgentId;
-      originalAgentId?: AgentId;
-      routedFrom?: AgentId;
-      routingReason?: string;
-      fileScope: string[];
-      status: TaskStatus;
-      costUsd?: number;
-    }>;
-    antiPatternsConsulted?: string[];
-    worktreeBranch?: string;
-  };
+  cardId?: string;
   diffSummary?: WorktreeDiffSummary;
   artifacts?: MessageArtifact[];
-  observerAudits?: ObserverAuditRecord[];
-  dualLayerMemory?: DualLayerMemoryInfo;
-  operations?: Array<{
-    timestamp: number;
-    agentId: AgentId;
-    action: string;
-    detail?: string;
-  }>;
-  cost?: {
-    usd: number;
-    formatted: string;
-    tokens: number;
-  };
 }
-
 
 export interface AppLevelConfig {
   agentBinaries?: Record<string, string>;
-  hindsight?: {
-    provider: string;
-    apiKey: string;
-    url: string;
-    autoStartDaemon: boolean;
-    defaultBank: string;
-  };
   app?: {
     gitPath: string;
     defaultRepoPath: string;

@@ -18,17 +18,21 @@ import {
   Plugin,
   SessionCreateInput
 } from '../shared/types.ts';
+import { BoardData, BoardLogEntry, ReviewMode, Tier, TurnRecord } from '../shared/board.ts';
 
 export const App: React.FC = () => {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const [availableModels, setAvailableModels] = useState<DiscoveredModel[]>([]);
   const [costSummary, setCostSummary] = useState<SessionCostSummary | undefined>();
-  const [hindsightConnected, setHindsightConnected] = useState<boolean>(false);
   const [agentHealth, setAgentHealth] = useState<Record<string, AgentHealthStatus>>({});
   const [agentBinaries, setAgentBinaries] = useState<Record<string, string>>({});
   const [chatMessages, setChatMessages] = useState<GoalChatMessage[]>([]);
-  const [isOrchestrating, setIsOrchestrating] = useState<boolean>(false);
+  const [isSending, setIsSending] = useState<boolean>(false);
+  const [board, setBoard] = useState<BoardData | null>(null);
+  const [boardLog, setBoardLog] = useState<BoardLogEntry[]>([]);
+  const [runningTurns, setRunningTurns] = useState<TurnRecord[]>([]);
+  const [recentTurns, setRecentTurns] = useState<TurnRecord[]>([]);
 
   // Layout & Navigation State
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
@@ -42,7 +46,7 @@ export const App: React.FC = () => {
   const [isNewSessionOpen, setIsNewSessionOpen] = useState(false);
   const [isRefreshingModels, setIsRefreshingModels] = useState(false);
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
-  const [terminalInitialCmd, setTerminalInitialCmd] = useState('claude login');
+  const [terminalInitialCmd, setTerminalInitialCmd] = useState('');
   const [isStartupModalOpen, setIsStartupModalOpen] = useState(true);
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
 
@@ -72,28 +76,25 @@ export const App: React.FC = () => {
       try {
         const { type, payload } = JSON.parse(event.data);
 
+        if (!currentSession || payload.sessionId !== currentSession.id) return;
+
         if (type === 'cost:updated') {
-          if (currentSession && payload.sessionId === currentSession.id) {
-            setCostSummary(payload.sessionSummary);
-          }
-        } else if (type === 'goal:planning' || type === 'goal:tasks_created' || type === 'goal:task_progress' || type === 'goal:task_completed' || type === 'goal:completed') {
-          if (currentSession && payload.sessionId === currentSession.id) {
-            if (payload.message) {
-              setChatMessages(prev => {
-                const idx = prev.findIndex(m => m.id === payload.message.id);
-                if (idx >= 0) {
-                  const updated = [...prev];
-                  updated[idx] = payload.message;
-                  return updated;
-                }
-                return [...prev, payload.message];
-              });
-            }
-            if (type === 'goal:completed') {
-              setIsOrchestrating(false);
-              fetchCost(currentSession.id);
-            }
-          }
+          setCostSummary(payload.sessionSummary);
+        } else if (type === 'board:updated') {
+          setBoard(payload.board);
+          setRunningTurns(payload.runningTurns || []);
+          if (payload.entry) setBoardLog(prev => [...prev.slice(-299), payload.entry]);
+        } else if (type === 'chat:message') {
+          setChatMessages(prev => {
+            const withoutTemp = prev.filter(m => !(m.id.startsWith('temp-') && m.sender === payload.message.sender && m.content === payload.message.content));
+            return withoutTemp.some(m => m.id === payload.message.id) ? withoutTemp : [...withoutTemp, payload.message];
+          });
+        } else if (type === 'turn:started') {
+          setRunningTurns(prev => [...prev.filter(t => t.id !== payload.turn.id), payload.turn]);
+        } else if (type === 'turn:ended') {
+          setRunningTurns(prev => prev.filter(t => t.id !== payload.turn.id));
+          setRecentTurns(prev => [...prev.slice(-29), payload.turn]);
+          fetchCost(currentSession.id);
         }
       } catch (err) {
         console.error('WS parse error', err);
@@ -107,11 +108,10 @@ export const App: React.FC = () => {
     try {
       const res = await fetch('/api/v1/health');
       const data = await res.json();
-      setHindsightConnected(data.hindsight?.connected || false);
       if (data.agents) setAgentHealth(data.agents);
       if (data.agentBinaries) setAgentBinaries(data.agentBinaries);
     } catch {
-      setHindsightConnected(false);
+      // The server is not up yet; the startup dialog keeps polling.
     }
   };
 
@@ -162,6 +162,21 @@ export const App: React.FC = () => {
     } catch {}
     fetchChat(session.id);
     fetchCost(session.id);
+    fetchBoard(session.id);
+  };
+
+  const fetchBoard = async (sessionId: string) => {
+    try {
+      const res = await fetch(`/api/v1/sessions/${sessionId}/board`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setBoard(data.board);
+      setBoardLog(data.log || []);
+      setRunningTurns(data.runningTurns || []);
+      setRecentTurns(data.recentTurns || []);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const fetchChat = async (sessionId: string) => {
@@ -196,6 +211,7 @@ export const App: React.FC = () => {
             } else {
               setCurrentSession(null);
               setChatMessages([]);
+              setBoard(null);
               setCostSummary(undefined);
             }
           }
@@ -225,6 +241,7 @@ export const App: React.FC = () => {
             } else {
               setCurrentSession(null);
               setChatMessages([]);
+              setBoard(null);
               setCostSummary(undefined);
             }
           }
@@ -240,6 +257,7 @@ export const App: React.FC = () => {
             } else {
               setCurrentSession(null);
               setChatMessages([]);
+              setBoard(null);
               setCostSummary(undefined);
             }
           }
@@ -251,84 +269,51 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleStartExecution = async (sessionId: string) => {
-    setIsOrchestrating(true);
-    try {
-      const res = await fetch(`/api/v1/sessions/${sessionId}/goal/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      const data = await res.json();
-      if (data.message) {
-        fetchChat(sessionId);
-        fetchCost(sessionId);
-      }
-    } catch (err) {
-      console.error('Start execution error', err);
-    } finally {
-      setIsOrchestrating(false);
-    }
-  };
-
   const handleSendGoal = async (goal: string) => {
     if (!currentSession) {
-      // Auto-create a session if none exists
-      try {
-        const createRes = await fetch('/api/v1/sessions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: goal.substring(0, 30),
-            repoPath: 'c:\\Users\\jeeyo\\Desktop\\johnson',
-            macroGoal: goal,
-            agents: [
-              { agentId: 'claude', model: 'claude-opus-5-5', mode: 'acp' },
-              { agentId: 'codex', model: 'gpt-6.1-sol', mode: 'acp' },
-              { agentId: 'antigravity', model: 'gemini-4-argon', mode: 'acp' }
-            ]
-          })
-        });
-        const newSession = await createRes.json();
-        setSessions(prev => [newSession, ...prev]);
-        setCurrentSession(newSession);
-        dispatchGoal(newSession.id, goal);
-      } catch (err) {
-        console.error(err);
-      }
+      setIsNewSessionOpen(true);
       return;
     }
-
-    dispatchGoal(currentSession.id, goal);
-  };
-
-  const dispatchGoal = async (sessionId: string, goal: string) => {
-    setIsOrchestrating(true);
-    // Optimistically add user message
-    const tempUserMsg: GoalChatMessage = {
-      id: `temp-${Date.now()}`,
-      sender: 'user',
-      content: goal,
-      timestamp: Date.now()
-    };
-    setChatMessages(prev => [...prev, tempUserMsg]);
-
+    const sessionId = currentSession.id;
+    setIsSending(true);
+    // Shown at once; replaced by the stored message when the server echoes it.
+    setChatMessages(prev => [...prev, { id: `temp-${Date.now()}`, sender: 'user', content: goal, timestamp: Date.now() }]);
     try {
-      const res = await fetch(`/api/v1/sessions/${sessionId}/goal`, {
+      await fetch(`/api/v1/sessions/${sessionId}/goal`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ goal })
       });
-      const data = await res.json();
-      if (data.message) {
-        fetchChat(sessionId);
-        fetchCost(sessionId);
-      }
+      fetchChat(sessionId);
+      fetchBoard(sessionId);
     } catch (err) {
-      console.error('Goal dispatch error', err);
+      console.error('Failed to send', err);
     } finally {
-      setIsOrchestrating(false);
+      setIsSending(false);
     }
   };
+
+  const boardAction = async (path: string, method: string, body?: unknown) => {
+    if (!currentSession) return;
+    const sessionId = currentSession.id;
+    try {
+      await fetch(`/api/v1/sessions/${sessionId}/board${path}`, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body)
+      });
+      fetchBoard(sessionId);
+    } catch (err) {
+      console.error('Board action failed', err);
+    }
+  };
+
+  const handleAnswerCard = async (cardId: string, answer: string) => {
+    await boardAction(`/cards/${cardId}/answer`, 'POST', { answer });
+    if (currentSession) fetchChat(currentSession.id);
+  };
+  const handleSetReviewMode = (mode: ReviewMode) => boardAction('/settings', 'PUT', { reviewMode: mode });
+  const handleSetMinTier = (cardId: string, tier: Tier | null) => boardAction(`/cards/${cardId}`, 'PUT', { minTier: tier });
 
   const handleCreateSession = async (input: SessionCreateInput) => {
     try {
@@ -338,6 +323,10 @@ export const App: React.FC = () => {
         body: JSON.stringify(input)
       });
       const newSession = await res.json();
+      if (!res.ok) {
+        window.alert(newSession.error || 'Could not create the session.');
+        return;
+      }
       setSessions(prev => [newSession, ...prev]);
       setIsSettingsOpen(false);
       selectSession(newSession);
@@ -372,13 +361,8 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleOpenTerminal = (cmd: string = 'claude login') => {
-    let resolvedCmd = cmd;
-    if (resolvedCmd === 'claude login') {
-      const claudeBin = agentBinaries.claude;
-      resolvedCmd = claudeBin ? `& "${claudeBin}" login` : 'claude login';
-    }
-    setTerminalInitialCmd(resolvedCmd);
+  const handleOpenTerminal = (cmd: string = '') => {
+    setTerminalInitialCmd(cmd);
     setIsTerminalOpen(true);
   };
 
@@ -397,23 +381,6 @@ export const App: React.FC = () => {
       return await res.json();
     } catch (err: any) {
       return { success: false, message: err.message };
-    }
-  };
-
-  const handleAnswerQuestion = async (messageId: string, questionId: string, selectedOptions: string[], customAnswer?: string) => {
-    if (!currentSession) return;
-    try {
-      const res = await fetch(`/api/v1/sessions/${currentSession.id}/chat/answer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messageId, questionId, selectedOptions, customAnswer })
-      });
-      if (res.ok) {
-        await fetchChat(currentSession.id);
-        await fetchCost(currentSession.id);
-      }
-    } catch (err) {
-      console.error('Failed to answer question', err);
     }
   };
 
@@ -438,7 +405,6 @@ export const App: React.FC = () => {
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
         agentHealth={agentHealth}
-        hindsightConnected={hindsightConnected}
       />
 
       {/* Main Content Area */}
@@ -447,7 +413,6 @@ export const App: React.FC = () => {
         <TopBar
           currentSession={currentSession || undefined}
           costSummary={costSummary}
-          hindsightConnected={hindsightConnected}
           onOpenNewSession={() => {
             setIsSettingsOpen(false);
             setIsNewSessionOpen(true);
@@ -477,15 +442,20 @@ export const App: React.FC = () => {
             <GoalChat
               currentSession={currentSession}
               messages={chatMessages}
-              isOrchestrating={isOrchestrating}
+              board={board}
+              log={boardLog}
+              runningTurns={runningTurns}
+              recentTurns={recentTurns}
+              isSending={isSending}
               onSendGoal={handleSendGoal}
-              onStartExecution={handleStartExecution}
-              availableModels={availableModels}
-              costSummary={costSummary}
-              onOpenTerminal={handleOpenTerminal}
+              onAnswerCard={handleAnswerCard}
+              onSetReviewMode={handleSetReviewMode}
+              onPause={() => boardAction('/pause', 'POST')}
+              onResume={() => boardAction('/resume', 'POST')}
+              onSetMinTier={handleSetMinTier}
               onMergeWorktree={handleMergeWorktree}
               onDiscardWorktree={handleDiscardWorktree}
-              onAnswerQuestion={handleAnswerQuestion}
+              onOpenNewSession={() => setIsNewSessionOpen(true)}
             />
           </main>
         )}
@@ -510,7 +480,6 @@ export const App: React.FC = () => {
       <StartupProgressModal
         isOpen={isStartupModalOpen}
         onDismiss={() => setIsStartupModalOpen(false)}
-        hindsightConnected={hindsightConnected}
         agentHealth={agentHealth}
         sessionsLoaded={sessionsLoaded}
         sessionsCount={sessions.length}

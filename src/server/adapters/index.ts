@@ -1,30 +1,25 @@
 export * from './types.ts';
-export * from './claude.adapter.ts';
-export * from './codex.adapter.ts';
-export * from './antigravity.adapter.ts';
-export * from './opencode.adapter.ts';
 
 import { AgentAdapter } from './types.ts';
 import { claudeAdapter } from './claude.adapter.ts';
 import { codexAdapter } from './codex.adapter.ts';
-import { antigravityAdapter } from './antigravity.adapter.ts';
-import { OpencodeAdapter } from './opencode.adapter.ts';
-import { AgentId } from '../../shared/types.ts';
+import { opencodeAdapter } from './opencode.adapter.ts';
+import { HarnessId } from '../../shared/board.ts';
 
-export const opencodeAdapter = new OpencodeAdapter();
+export const HARNESSES: HarnessId[] = ['claude', 'codex', 'opencode'];
 
-const registry = new Map<AgentId, AgentAdapter>([
+const registry = new Map<string, AgentAdapter>([
   ['claude', claudeAdapter],
   ['codex', codexAdapter],
-  ['antigravity', antigravityAdapter],
   ['opencode', opencodeAdapter]
 ]);
 
-export function getAgentAdapter(agentId: AgentId): AgentAdapter {
-  const adapter = registry.get(agentId);
-  if (!adapter) {
-    // Default to antigravity adapter for unspecified or mock agents
-    return antigravityAdapter;
-  }
+export function isHarness(id: unknown): id is HarnessId {
+  return typeof id === 'string' && registry.has(id);
+}
+
+export function getAgentAdapter(harness: string): AgentAdapter {
+  const adapter = registry.get(harness);
+  if (!adapter) throw new Error(`Unknown harness: ${harness}`);
   return adapter;
 }

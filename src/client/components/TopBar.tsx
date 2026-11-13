@@ -6,7 +6,6 @@ import { Session, SessionCostSummary, DiscoveredModel, AgentHealthStatus } from 
 interface TopBarProps {
   currentSession?: Session;
   costSummary?: SessionCostSummary;
-  hindsightConnected: boolean;
   onOpenNewSession: () => void;
   onOpenCustomizations: () => void;
   onRefreshModels: () => void;
@@ -22,7 +21,6 @@ interface TopBarProps {
 export const TopBar: React.FC<TopBarProps> = ({
   currentSession,
   costSummary,
-  hindsightConnected,
   onOpenNewSession,
   onOpenCustomizations,
   onRefreshModels,
@@ -34,9 +32,11 @@ export const TopBar: React.FC<TopBarProps> = ({
   isSidebarCollapsed,
   onOpenSettings
 }) => {
-  const codexHealth = agentHealth['codex'];
-  const claudeHealth = agentHealth['claude'];
-  const antigravityHealth = agentHealth['antigravity'];
+  const harnesses: Array<{ id: string; label: string; login?: string }> = [
+    { id: 'claude', label: 'Claude', login: 'claude login' },
+    { id: 'codex', label: 'Codex', login: 'codex login' },
+    { id: 'opencode', label: 'OpenCode', login: 'opencode auth login' }
+  ];
 
   return (
     <header className="h-13 border-b border-zinc-800 bg-zinc-950 px-2.5 sm:px-4 py-2 flex items-center justify-between select-none flex-shrink-0">
@@ -78,51 +78,31 @@ export const TopBar: React.FC<TopBarProps> = ({
         )}
       </div>
 
-      {/* Middle: Live Agent Health & Model Badges */}
+      {/* Middle: agent CLI health */}
       <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-lg bg-zinc-900/60 border border-zinc-800 text-xs">
-        {/* Antigravity status */}
-        <span
-          title="Google Antigravity: Operational & Connected"
-          className="flex items-center gap-1 font-mono text-[11px] text-zinc-300"
-        >
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-          <span>Antigravity</span>
-        </span>
-
-        <span className="text-zinc-600">·</span>
-
-        {/* Codex status */}
-        <span
-          title={codexHealth?.message || 'OpenAI Codex'}
-          className={`flex items-center gap-1 font-mono text-[11px] ${
-            codexHealth?.status === 'rate_limited' ? 'text-amber-400' : 'text-zinc-300'
-          }`}
-        >
-          <span className={`w-1.5 h-1.5 rounded-full ${
-            codexHealth?.status === 'rate_limited' ? 'bg-amber-400' : 'bg-emerald-400'
-          }`} />
-          <span>Codex {codexHealth?.status === 'rate_limited' ? `(${codexHealth.resetTime || 'Limit'})` : ''}</span>
-        </span>
-
-        <span className="text-zinc-600">·</span>
-
-        {/* Claude status */}
-        <button
-          onClick={() => claudeHealth?.status === 'not_logged_in' && onOpenTerminal && onOpenTerminal('claude login')}
-          title={claudeHealth?.message || 'Claude Code'}
-          className={`flex items-center gap-1 font-mono text-[11px] hover:underline cursor-pointer ${
-            claudeHealth?.status === 'not_logged_in' ? 'text-rose-400' : 'text-zinc-300'
-          }`}
-        >
-          <span className={`w-1.5 h-1.5 rounded-full ${
-            claudeHealth?.status === 'not_logged_in' ? 'bg-rose-400' : 'bg-emerald-400'
-          }`} />
-          <span>Claude {claudeHealth?.status === 'not_logged_in' ? '(Login Needed)' : ''}</span>
-        </button>
+        {harnesses.map((h, i) => {
+          const health = agentHealth[h.id];
+          const ready = health?.status === 'ready';
+          const needsLogin = health?.status === 'not_logged_in';
+          const missing = health?.status === 'not_installed';
+          return (
+            <React.Fragment key={h.id}>
+              {i > 0 && <span className="text-zinc-600">·</span>}
+              <button
+                onClick={() => needsLogin && h.login && onOpenTerminal && onOpenTerminal(h.login)}
+                title={health?.message || h.label}
+                className={`flex items-center gap-1 font-mono text-[11px] ${needsLogin ? 'text-rose-400 hover:underline cursor-pointer' : missing ? 'text-zinc-600 cursor-default' : 'text-zinc-300 cursor-default'}`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${ready ? 'bg-emerald-400' : needsLogin ? 'bg-rose-400' : missing ? 'bg-zinc-700' : 'bg-amber-400'}`} />
+                <span>{h.label}{needsLogin ? ' (login needed)' : missing ? ' (not installed)' : ''}</span>
+              </button>
+            </React.Fragment>
+          );
+        })}
 
         <button
           onClick={onRefreshModels}
-          title="Re-probe agent models & auth health"
+          title="Re-check agent CLIs and models"
           disabled={isRefreshingModels}
           className="ml-1 p-0.5 text-zinc-500 hover:text-zinc-300 transition-colors"
         >
@@ -130,17 +110,8 @@ export const TopBar: React.FC<TopBarProps> = ({
         </button>
       </div>
 
-      {/* Right: Cost Counter, Hindsight & Controls */}
+      {/* Right: cost and controls */}
       <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
-        {/* Hindsight Status */}
-        <div
-          title={hindsightConnected ? 'Vectorize Hindsight Connected' : 'Hindsight Offline'}
-          className="flex items-center gap-1.5 px-1.5 sm:px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400"
-        >
-          <span className={`w-1.5 h-1.5 rounded-full ${hindsightConnected ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
-          <span className="hidden md:inline">Hindsight</span>
-        </div>
-
         {/* Real-time USD Cost Widget */}
         {costSummary && (
           <CostWidget
@@ -151,7 +122,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         {/* In-App Terminal Quick Launch */}
         {onOpenTerminal && (
           <button
-            onClick={() => onOpenTerminal('powershell.exe')}
+            onClick={() => onOpenTerminal('')}
             title="Open In-App Terminal"
             className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
           >
@@ -163,7 +134,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         {onOpenSettings && (
           <button
             onClick={onOpenSettings}
-            title="App-Level Configuration & Settings"
+            title="App settings"
             className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
           >
             <Settings className="w-3.5 h-3.5" />

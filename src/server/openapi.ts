@@ -1,188 +1,642 @@
+// The REST surface, as shown at /api/docs. Agents reach the board through MCP at /mcp, not through these routes.
 export const openApiSpec = {
-  openapi: '3.0.3',
-  info: {
-    title: 'Smith API',
-    version: '1.0.0',
-    description: 'Smith API'
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Smith API",
+    "version": "2.0.0",
+    "description": "Smith: a leaderless team of coding agents working on a shared board."
   },
-  servers: [
-    { url: '/api/v1', description: 'Smith Orchestrator API v1' }
+  "servers": [
+    {
+      "url": "/api/v1",
+      "description": "Smith API v1"
+    }
   ],
-  paths: {
-    '/health': {
-      get: {
-        summary: 'Health check, Hindsight state, and agent authentication diagnostics',
-        responses: { 200: { description: 'Health report' } }
-      }
-    },
-    '/system/agents/status': {
-      get: {
-        summary: 'Live health, binary path, auth, and rate-limit diagnostics for all local agents',
-        responses: { 200: { description: 'Agent health and auth statuses' } }
-      }
-    },
-    '/system/models': {
-      get: {
-        summary: 'List dynamically discovered models per agent',
-        responses: { 200: { description: 'Discovered models' } }
-      }
-    },
-    '/system/models/refresh': {
-      post: {
-        summary: 'Force live re-probing of local agent CLIs',
-        responses: { 200: { description: 'Refreshed models' } }
-      }
-    },
-    '/sessions': {
-      get: {
-        summary: 'List active sessions with running costs in USD',
-        responses: { 200: { description: 'Active sessions' } }
-      },
-      post: {
-        summary: 'Create a new collaborative multi-agent session',
-        requestBody: {
-          required: true,
-          content: { 'application/json': { schema: { type: 'object' } } }
-        },
-        responses: { 201: { description: 'Session created' } }
-      }
-    },
-    '/sessions/{id}': {
-      get: {
-        summary: 'Get session details, tasks, and file locks',
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        responses: { 200: { description: 'Session details' } }
-      },
-      delete: {
-        summary: 'Terminate session and cleanup worktrees',
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        responses: { 200: { description: 'Session deleted' } }
-      }
-    },
-    '/sessions/{id}/cost': {
-      get: {
-        summary: 'Get real-time hierarchical USD cost breakdown',
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        responses: { 200: { description: 'USD cost report' } }
-      }
-    },
-    '/sessions/{id}/agents/{agentId}': {
-      patch: {
-        summary: 'Hot-reload agent model mid-session',
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
-          { name: 'agentId', in: 'path', required: true, schema: { type: 'string' } }
-        ],
-        requestBody: {
-          required: true,
-          content: { 'application/json': { schema: { type: 'object', properties: { model: { type: 'string' } } } } }
-        },
-        responses: { 200: { description: 'Model hot-reloaded' } }
-      }
-    },
-    '/sessions/{id}/tasks': {
-      get: {
-        summary: 'Get live task DAG and active file locks (non-racing cooperative protocol)',
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        responses: { 200: { description: 'Task DAG' } }
-      },
-      post: {
-        summary: 'Delegate a new subtask into the DAG',
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        responses: { 201: { description: 'Subtask added' } }
-      }
-    },
-    '/sessions/{id}/tasks/{taskId}/claim': {
-      post: {
-        summary: 'Atomically claim task and acquire exclusive file-scope locks',
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
-          { name: 'taskId', in: 'path', required: true, schema: { type: 'string' } }
-        ],
-        responses: {
-          200: { description: 'Lease granted' },
-          409: { description: 'Conflict: file scope locked by another agent' }
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Server liveness and agent CLI health",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
         }
       }
     },
-    '/sessions/{id}/messages': {
-      get: {
-        summary: 'Chronological team chat history',
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        responses: { 200: { description: 'Team messages' } }
+    "/system/info": {
+      "get": {
+        "summary": "Version, platform and supported harnesses",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/system/agents/status": {
+      "get": {
+        "summary": "Health of each agent CLI; ?refresh=true re-probes",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/system/models": {
+      "get": {
+        "summary": "Models discovered per harness",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/system/models/refresh": {
+      "post": {
+        "summary": "Re-discover models",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/system/pricing": {
+      "get": {
+        "summary": "Per-model pricing used for cost estimates",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
       },
-      post: {
-        summary: 'Broadcast message, intent, or anti-pattern to team bus',
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        responses: { 201: { description: 'Message broadcasted' } }
+      "put": {
+        "summary": "Override pricing for a model",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
       }
     },
-    '/sessions/{id}/customizations': {
-      get: {
-        summary: 'Get active session plugins, skills, and MCP servers',
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        responses: { 200: { description: 'Customizations' } }
+    "/system/config": {
+      "get": {
+        "summary": "App configuration",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
       },
-      put: {
-        summary: 'Hot-update session customizations mid-session without agent restart',
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        responses: { 200: { description: 'Customizations updated' } }
+      "put": {
+        "summary": "Save app configuration",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
       }
     },
-    '/sessions/{id}/memory': {
-      get: {
-        summary: 'Query Hindsight world facts, experiences, and anti-patterns',
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        responses: { 200: { description: 'Hindsight memory state' } }
+    "/system/config/probe-binary": {
+      "post": {
+        "summary": "Check that a binary exists on disk or on PATH",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
       }
     },
-    '/sessions/{id}/chat': {
-      get: {
-        summary: 'Get chronological unified chat timeline for single-interface goal mode',
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        responses: { 200: { description: 'Chat message history' } }
+    "/system/pty/create": {
+      "post": {
+        "summary": "Start an in-app terminal",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
       }
     },
-    '/sessions/{id}/goal': {
-      post: {
-        summary: 'Declare macro-goal: triggers non-racing cooperative decomposition and parallel execution',
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        requestBody: {
-          required: true,
-          content: { 'application/json': { schema: { type: 'object', properties: { goal: { type: 'string' } }, required: ['goal'] } } }
+    "/system/pty/{ptyId}": {
+      "delete": {
+        "summary": "Stop an in-app terminal",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
         },
-        responses: { 200: { description: 'Goal executed and orchestrated across agents' } }
+        "parameters": [
+          {
+            "name": "ptyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
-    '/sessions/{id}/memory/dual-layer': {
-      get: {
-        summary: 'Get per-session dual-layer memory (.smith/memory/sessions/{sessionId}) including team knowledge and private scratchpads',
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        responses: { 200: { description: 'Dual-layer memory configuration and synchronized team workspace content' } }
+    "/customizations": {
+      "get": {
+        "summary": "Catalog of skills, MCP servers and plugins",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
       }
     },
-    '/sessions/{id}/memory/compaction-flush': {
-      post: {
-        summary: 'Execute Compaction Survival Routine: flush durable discoveries into shared team workspace before context truncation',
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        requestBody: {
-          content: { 'application/json': { schema: { type: 'object', properties: { agentId: { type: 'string' }, durableKnowledge: { type: 'string' } } } } }
+    "/board/tools": {
+      "get": {
+        "summary": "The board tools peers can call",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/sessions": {
+      "get": {
+        "summary": "List sessions",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a session with an isolated git worktree and a team of workers",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/sessions/batch-delete": {
+      "post": {
+        "summary": "Delete several sessions",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/sessions/{id}": {
+      "get": {
+        "summary": "One session",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
         },
-        responses: { 200: { description: 'Compaction survival flush status and bytes compacted' } }
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "delete": {
+        "summary": "Delete a session, its worktrees and its board",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
-    '/sessions/{id}/observer/audits': {
-      get: {
-        summary: 'Query The Observer Agent independent telemetry audits, milestone certifications, and anti-gaming checks',
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        responses: { 200: { description: 'Observer audit history' } }
+    "/sessions/{id}/agents": {
+      "put": {
+        "summary": "Replace the session workers",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
-    '/sessions/{id}/broadcast/peer-state': {
-      get: {
-        summary: 'Query live in-IDE broadcast chat layer state: active proposals, consensus votes, and emergency coordinate alerts',
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        responses: { 200: { description: 'Broadcast peer negotiation state' } }
+    "/sessions/{id}/chat": {
+      "get": {
+        "summary": "The session conversation",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/sessions/{id}/goal": {
+      "post": {
+        "summary": "Send user input: start a goal, answer the team, resume, or add a card",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/sessions/{id}/board": {
+      "get": {
+        "summary": "The board, its change log and agent turns",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/sessions/{id}/board/settings": {
+      "put": {
+        "summary": "Set review mode (fast, normal, thorough) and limits",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/sessions/{id}/board/pause": {
+      "post": {
+        "summary": "Pause the goal",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/sessions/{id}/board/resume": {
+      "post": {
+        "summary": "Resume a paused goal",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/sessions/{id}/board/cards/{cardId}": {
+      "put": {
+        "summary": "Change an open card as the user",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cardId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/sessions/{id}/board/cards/{cardId}/answer": {
+      "post": {
+        "summary": "Answer a card that is waiting for the user",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cardId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/sessions/{id}/customizations": {
+      "get": {
+        "summary": "Session skills and extra MCP servers",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "put": {
+        "summary": "Update session skills and extra MCP servers",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/sessions/{id}/cost": {
+      "get": {
+        "summary": "Token usage and estimated cost for the session",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/sessions/{id}/worktree": {
+      "get": {
+        "summary": "Session worktree status",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/sessions/{id}/worktree/diff": {
+      "get": {
+        "summary": "Uncommitted diff of the session worktree",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/sessions/{id}/worktree/summary": {
+      "get": {
+        "summary": "Per-file change summary against the base branch",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/sessions/{id}/worktree/file": {
+      "get": {
+        "summary": "Serve a file from the session workspace (?path=, &download=1)",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/sessions/{id}/worktree/artifacts": {
+      "get": {
+        "summary": "Files the team produced that can be previewed",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/sessions/{id}/worktree/commit": {
+      "post": {
+        "summary": "Commit the session worktree",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/sessions/{id}/worktree/merge": {
+      "post": {
+        "summary": "Merge the session branch into its base branch",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/sessions/{id}/worktree/discard": {
+      "post": {
+        "summary": "Discard uncommitted changes in the session worktree",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     }
   }

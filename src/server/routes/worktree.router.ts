@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
-import { getSession } from './sessions.router.ts';
+import { getSession } from '../session-store.ts';
 import { worktreeManager } from '../worktree-manager.ts';
 import { ArtifactType, MessageArtifact } from '../../shared/types.ts';
 
@@ -67,12 +67,10 @@ worktreeRouter.get('/sessions/:id/worktree/summary', async (req, res) => {
   const session = getSession(req.params.id);
   if (!session) return res.status(404).json({ error: 'Session not found' });
 
-  const touchedFiles = Object.values(session.tasks).flatMap(t => t.fileScope);
   const summary = await worktreeManager.getDiffSummary(
     session.worktree.path,
     session.worktree.branch,
-    session.worktree.baseBranch,
-    touchedFiles
+    session.worktree.baseBranch
   );
 
   res.json(summary);

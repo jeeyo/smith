@@ -11,24 +11,21 @@ import { openApiSpec } from './openapi.ts';
 // Routers
 import { systemRouter } from './routes/system.router.ts';
 import { sessionsRouter } from './routes/sessions.router.ts';
-import { agentsRouter } from './routes/agents.router.ts';
-import { tasksRouter } from './routes/tasks.router.ts';
-import { messagesRouter } from './routes/messages.router.ts';
 import { customizationsRouter } from './routes/customizations.router.ts';
 import { worktreeRouter } from './routes/worktree.router.ts';
 import { costRouter } from './routes/cost.router.ts';
-import { memoryRouter } from './routes/memory.router.ts';
 import { goalRouter } from './routes/goal.router.ts';
-import { goalOrchestrator } from './goal-orchestrator.ts';
+import { boardRouter } from './routes/board.router.ts';
+import { mcpRouter } from './mcp-server.ts';
 
 // Services
 import { costEngine } from './cost-engine.ts';
-import { taskLeaseManager } from './task-lease-manager.ts';
-import { teamBus } from './team-bus.ts';
-import { acpHostEngine } from './acp-host.ts';
 import { ptyManager } from './pty-manager.ts';
-import { seedSampleData } from './seed.ts';
-import { hindsightService } from './hindsight-service.ts';
+import { boardStore } from './board-store.ts';
+import { sessionChat } from './session-chat.ts';
+import { scheduler } from './scheduler.ts';
+import { sessionStore } from './session-store.ts';
+import { startTeamAnnouncements } from './team.ts';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1', 'tauri.localhost']);
 
@@ -60,7 +57,10 @@ app.use((req, res, next) => {
   next();
 });
 app.use(cors({ origin: (origin, cb) => cb(null, isAllowedOrigin(origin)) }));
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
+
+// The board, for agent turns (MCP over HTTP, bearer token per turn)
+app.use('/mcp', mcpRouter);
 
 // API Documentation
 app.get('/api/v1/openapi.json', (req, res) => res.json(openApiSpec));
@@ -69,14 +69,11 @@ app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openApiSpec));
 // Mount REST Routers under /api/v1
 app.use('/api/v1', systemRouter);
 app.use('/api/v1', sessionsRouter);
-app.use('/api/v1', agentsRouter);
-app.use('/api/v1', tasksRouter);
-app.use('/api/v1', messagesRouter);
 app.use('/api/v1', customizationsRouter);
 app.use('/api/v1', worktreeRouter);
 app.use('/api/v1', costRouter);
-app.use('/api/v1', memoryRouter);
 app.use('/api/v1', goalRouter);
+app.use('/api/v1', boardRouter);
 
 // Static frontend serving if built
 const distPath = process.env.DIST_PATH && fs.existsSync(process.env.DIST_PATH)
@@ -95,7 +92,7 @@ if (fs.existsSync(distPath)) {
     }
   }));
   app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api') || req.path.startsWith('/ws')) return next();
+    if (req.path.startsWith('/api') || req.path.startsWith('/ws') || req.path.startsWith('/mcp')) return next();
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
@@ -109,7 +106,7 @@ if (fs.existsSync(distPath)) {
         <head><title>Smith Server</title></head>
         <body style="font-family: sans-serif; background: #0f172a; color: #f8fafc; padding: 2rem;">
           <h1>Smith</h1>
-          <p>Smith Orchestrator Server is active on port ${config.port}.</p>
+          <p>The Smith server is running on port ${config.port}.</p>
           <ul>
             <li><a style="color: #38bdf8;" href="/api/docs">Interactive API Documentation (Swagger)</a></li>
             <li><a style="color: #38bdf8;" href="/api/v1/health">System Health Check</a></li>
@@ -182,23 +179,14 @@ function broadcastEvent(type: string, payload: any) {
 
 // Wire Event Broadcasters
 costEngine.on('cost:updated', (data) => broadcastEvent('cost:updated', data));
-taskLeaseManager.on('task:created', (data) => broadcastEvent('task:created', data));
-taskLeaseManager.on('task:claimed', (data) => broadcastEvent('task:claimed', data));
-taskLeaseManager.on('task:released', (data) => broadcastEvent('task:released', data));
-taskLeaseManager.on('task:completed', (data) => broadcastEvent('task:completed', data));
-taskLeaseManager.on('task:unblocked', (data) => broadcastEvent('task:unblocked', data));
-teamBus.on('team:message', (data) => broadcastEvent('team:message', data));
+boardStore.on('changed', ({ sessionId, entry }) => {
+  broadcastEvent('board:updated', { sessionId, entry, board: boardStore.get(sessionId).data, runningTurns: scheduler.runningTurns(sessionId) });
+});
+sessionChat.on('message', (data) => broadcastEvent('chat:message', data));
+scheduler.on('turn:started', (turn) => broadcastEvent('turn:started', { sessionId: turn.sessionId, turn }));
+scheduler.on('turn:ended', (turn) => broadcastEvent('turn:ended', { sessionId: turn.sessionId, turn }));
 
-goalOrchestrator.on('goal:planning', (data) => broadcastEvent('goal:planning', data));
-goalOrchestrator.on('goal:tasks_created', (data) => broadcastEvent('goal:tasks_created', data));
-goalOrchestrator.on('goal:task_progress', (data) => broadcastEvent('goal:task_progress', data));
-goalOrchestrator.on('goal:task_completed', (data) => broadcastEvent('goal:task_completed', data));
-goalOrchestrator.on('goal:completed', (data) => broadcastEvent('goal:completed', data));
-
-acpHostEngine.on('agent:stream', (data) => broadcastEvent('agent:stream', data));
-acpHostEngine.on('agent:status', (data) => broadcastEvent('agent:status', data));
-acpHostEngine.on('agent:model_updated', (data) => broadcastEvent('agent:model_updated', data));
-acpHostEngine.on('permission:request', (data) => broadcastEvent('permission:request', data));
+startTeamAnnouncements();
 
 ptyManager.on('pty:data', ({ ptyId, data }) => {
   const clients = ptyClients.get(ptyId);
@@ -210,10 +198,19 @@ ptyManager.on('pty:data', ({ ptyId, data }) => {
   }
 });
 
+ptyManager.on('pty:exit', ({ ptyId }) => {
+  const clients = ptyClients.get(ptyId);
+  if (!clients) return;
+  const msg = JSON.stringify({ type: 'pty:exit', ptyId });
+  for (const c of clients) {
+    if (c.readyState === WebSocket.OPEN) c.send(msg);
+  }
+});
+
 if (!process.env.VITEST) {
-  const shutdown = async () => {
-    console.log('Shutting down Smith and Hindsight daemon...');
-    await hindsightService.stopDaemon();
+  const shutdown = () => {
+    console.log('Shutting down Smith...');
+    scheduler.stop();
     process.exit(0);
   };
   process.on('SIGINT', shutdown);
@@ -225,31 +222,12 @@ if (!process.env.VITEST) {
     console.error('[smith] Unhandled promise rejection:', reason);
   });
 
-  server.listen(config.port, config.host, async () => {
-    console.log(`🚀 Smith Orchestrator Server listening on http://localhost:${config.port}`);
-    console.log(`📖 API Documentation available at http://localhost:${config.port}/api/docs`);
-
-    // Immediately warm up and verify Hindsight memory daemon if autoStartDaemon is enabled
-    if (config.hindsightAutoStartDaemon) {
-      console.log('🔄 Checking and initializing Hindsight memory daemon in background...');
-      hindsightService.checkHealth().catch((err) => {
-        console.warn('[hindsight] Startup check warning:', err);
-      });
-    }
-
-    // Demo data (sample tasks, costs and memory facts) is opt-in: seeding it unconditionally
-    // wrote fake facts into the newest real session's memory bank on every launch.
-    if (process.env.SMITH_SEED_DEMO !== '1') return;
-    try {
-      const res = await fetch(`http://localhost:${config.port}/api/v1/sessions`);
-      const data = await res.json();
-      if (data.sessions && data.sessions.length > 0) {
-        const first = data.sessions[0];
-        await seedSampleData(first.id, first.bankId);
-      }
-    } catch {
-      // Ignore initial fetch
-    }
+  server.listen(config.port, config.host, () => {
+    console.log(`Smith server listening on http://${config.host}:${config.port}`);
+    console.log(`API documentation at http://${config.host}:${config.port}/api/docs`);
+    // Goals that were running when the app closed pick up where the board left them.
+    scheduler.start();
+    for (const session of sessionStore.list()) scheduler.poke(session.id);
   });
 }
 

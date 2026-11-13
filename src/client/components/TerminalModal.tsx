@@ -11,7 +11,7 @@ interface TerminalModalProps {
 export const TerminalModal: React.FC<TerminalModalProps> = ({
   isOpen,
   onClose,
-  initialCommand = 'claude login',
+  initialCommand = '',
   onRefreshHealth
 }) => {
   const [ptyId, setPtyId] = useState<string | null>(null);
@@ -42,7 +42,7 @@ export const TerminalModal: React.FC<TerminalModalProps> = ({
         const res = await fetch('/api/v1/system/pty/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ command: 'powershell.exe' })
+          body: JSON.stringify({})
         });
         const data = await res.json();
         if (!active) return;
@@ -55,7 +55,7 @@ export const TerminalModal: React.FC<TerminalModalProps> = ({
 
         ws.onopen = () => {
           setIsConnected(true);
-          setLines(prev => [...prev, `[Smith ConPTY] Interactive Terminal session ${data.ptyId} attached.`]);
+          setLines(prev => [...prev, `[Smith] Shell ${data.ptyId} attached (${data.command}). This is a plain shell without a TTY: commands that need one, such as some browser logins, are better run in your own terminal.`]);
           if (initialCommand) {
             setTimeout(() => {
               ws.send(JSON.stringify({ type: 'input', data: `${initialCommand}\r\n` }));
@@ -76,7 +76,7 @@ export const TerminalModal: React.FC<TerminalModalProps> = ({
 
         ws.onclose = () => {
           setIsConnected(false);
-          setLines(prev => [...prev, '[Smith ConPTY] Terminal session disconnected.']);
+          setLines(prev => [...prev, '[Smith] Shell disconnected.']);
         };
       } catch (err: any) {
         setLines(prev => [...prev, `[Smith Error] Failed to create PTY: ${err.message}`]);

@@ -69,7 +69,7 @@ export interface CliResult {
 export function runCli(
   bin: string,
   args: string[],
-  options: { cwd?: string; timeoutMs?: number } = {}
+  options: { cwd?: string; timeoutMs?: number; env?: Record<string, string> } = {}
 ): Promise<CliResult> {
   return new Promise<CliResult>((resolve) => {
     let stdout = '';
@@ -84,7 +84,11 @@ export function runCli(
 
     let proc: ChildProcess;
     try {
-      proc = spawnCli(bin, args, { cwd: options.cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+      proc = spawnCli(bin, args, {
+        cwd: options.cwd,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: options.env ? { ...process.env, ...options.env } : process.env
+      });
     } catch (err: any) {
       resolve({ stdout, stderr: err.message, code: 1, timedOut: false, spawnError: err.message });
       return;
