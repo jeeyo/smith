@@ -2,8 +2,8 @@ cask "smith" do
   arch arm: "aarch64", intel: "x64"
 
   version "0.3.0"
-  sha256 arm:   "59ca104a4268d8b9086ea3cfcbdb2cebde8c06289425f6b4e20a88ee7a0198d7",
-         intel: "36c878b02ce944af6f9388c5179e7f67e3082dc6e768451f1a6a4c235e88691c"
+  sha256 arm:   "408ff4ffd44143460d9e19e5db96568f14a9224adba74b38c6bceb5204ae06bb",
+         intel: "9b89d85d133811d829f37bd3b218f75a988c1741448e141734d8b19c9958c7e1"
 
   url "https://github.com/jeeyo/smith/releases/download/v#{version}/Smith_#{version}_#{arch}.dmg"
   name "Smith"
