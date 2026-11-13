@@ -8,6 +8,7 @@ import { agentHealthEngine } from '../agent-health.ts';
 import { ptyManager } from '../pty-manager.ts';
 import { findOnPath } from '../process-utils.ts';
 import { HARNESSES } from '../adapters/index.ts';
+import { scheduler } from '../scheduler.ts';
 
 export const systemRouter = Router();
 
@@ -47,6 +48,8 @@ systemRouter.get('/health', (_req, res) => {
 systemRouter.get('/system/agents/status', async (req, res) => {
   const force = req.query.refresh === 'true';
   const agents = force ? await agentHealthEngine.probeAll() : agentHealthEngine.getAll();
+  // A CLI that was logged out may be usable again; let waiting goals pick up.
+  if (force) scheduler.pokeAll();
   res.json({ count: Object.keys(agents).length, agents });
 });
 
@@ -92,7 +95,7 @@ systemRouter.get('/system/config', (_req, res) => {
 
 systemRouter.put('/system/config', (req, res) => {
   config.saveConfig(req.body || {});
-  agentHealthEngine.probeAll().catch(() => {});
+  agentHealthEngine.probeAll().then(() => scheduler.pokeAll()).catch(() => {});
   res.json({ status: 'saved', config: publicConfig() });
 });
 

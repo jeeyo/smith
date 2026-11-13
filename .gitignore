@@ -24,3 +24,7 @@ pnpm-debug.log*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Local tooling
+.playwright-mcp/
+.claude/launch.json

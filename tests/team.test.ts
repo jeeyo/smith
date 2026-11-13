@@ -506,3 +506,41 @@ describe('Sessions', () => {
     expect((await request(app).get(`/api/v1/sessions/${session.id}/board`)).status).toBe(404);
   });
 });
+
+describe('A harness that fails to log in', () => {
+  it('stops being scheduled, tells the user what the CLI said, and resumes after a re-check', async () => {
+    const repo = makeRepo({ tasks: [{ title: 'Anything', description: 'a', acceptance: ['a'], fileScope: ['a.txt'] }] });
+    const session = await createSession(repo, [{ agentId: 'claude', model: 'opus' }], { reviewMode: 'fast' });
+    const board = boardStore.get(session.id);
+    let turns = 0;
+    let loggedIn = false;
+
+    runWith(async (peer, req, t) => {
+      turns++;
+      if (!loggedIn) return { ok: false, text: '', notLoggedIn: true, error: 'Invalid API key · Please run /login' };
+      return diligent(peer, req, t);
+    });
+
+    await request(app).post(`/api/v1/sessions/${session.id}/goal`).send({ goal: 'docs/spec.md' });
+    await until(() => !!board.data.goal.waitingReason, 'goal waiting');
+
+    expect(turns).toBe(1);
+    expect(board.data.goal.status).toBe('running');
+    expect(board.data.goal.waitingReason).toContain('Please run /login');
+    expect(board.cards()[0].state).toBe('ready');
+    expect(board.cards()[0].bounces).toBe(0);
+    expect(sessionChat.history(session.id).some(m => m.content.includes('Please run /login'))).toBe(true);
+
+    // Nothing more is attempted while the CLI is marked not ready.
+    scheduler.poke(session.id);
+    await new Promise(r => setTimeout(r, 100));
+    expect(turns).toBe(1);
+
+    // The user logs in and the CLIs are re-checked.
+    loggedIn = true;
+    agentHealthEngine.setStatus('claude', { agentId: 'claude', name: 'Claude Code', installed: true, authenticated: true, status: 'ready', message: 'ok', lastCheckedAt: Date.now() });
+    scheduler.poke(session.id);
+    await until(() => board.data.goal.status === 'completed', 'goal completed');
+    expect(board.data.goal.waitingReason).toBeUndefined();
+  });
+});

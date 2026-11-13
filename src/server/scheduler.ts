@@ -88,6 +88,13 @@ export class Scheduler extends EventEmitter {
     });
   }
 
+  /** Re-examines every running goal, for example after the agent CLIs were re-checked. */
+  pokeAll() {
+    for (const session of sessionStore.list()) {
+      if (boardStore.has(session.id)) this.poke(session.id);
+    }
+  }
+
   runningTurns(sessionId: string): TurnRecord[] {
     return Array.from(this.running.get(sessionId)?.values() || []).map(t => t.record);
   }
@@ -204,7 +211,8 @@ export class Scheduler extends EventEmitter {
     const notReady = active.filter(p => !this.harnessReady(p));
     if (notReady.length === active.length) {
       const names = Array.from(new Set(notReady.map(p => agentHealthEngine.get(p.harness)?.name || p.harness))).join(', ');
-      board.setWaiting(`No worker can run: ${names} is not ready. Check login and the binary path in App Settings.`);
+      const details = Array.from(new Set(notReady.map(p => agentHealthEngine.get(p.harness)?.message).filter(Boolean))).join(' ');
+      board.setWaiting(`No worker can run: ${names} is not ready. ${details} Check login and the binary path in App Settings, then re-check the agent CLIs.`.replace(/\s+/g, ' '));
       return;
     }
 
@@ -295,7 +303,8 @@ export class Scheduler extends EventEmitter {
         binaryPath: current?.binaryPath,
         authenticated: false,
         status: 'not_logged_in',
-        message: `${current?.name || peer.harness} is not logged in.`,
+        // Keep the CLI's own words: "not logged in" is inferred from them and may be wrong.
+        message: `${current?.name || peer.harness} reported a login problem: ${(result.error || 'no details').slice(0, 300)}`,
         remediation: 'Log in from the in-app terminal, then re-check.',
         lastCheckedAt: Date.now()
       });

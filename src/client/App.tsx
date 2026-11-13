@@ -335,12 +335,24 @@ export const App: React.FC = () => {
     }
   };
 
+  /** Re-probes the agent CLIs, for example after logging in; waiting goals then pick up. */
+  const recheckAgents = async () => {
+    try {
+      const res = await fetch('/api/v1/system/agents/status?refresh=true');
+      const data = await res.json();
+      if (data.agents) setAgentHealth(data.agents);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleRefreshModels = async () => {
     setIsRefreshingModels(true);
     try {
       const res = await fetch('/api/v1/system/models/refresh', { method: 'POST' });
       const data = await res.json();
       setAvailableModels(data.models || []);
+      await recheckAgents();
     } finally {
       setIsRefreshingModels(false);
     }
@@ -474,7 +486,7 @@ export const App: React.FC = () => {
         isOpen={isTerminalOpen}
         onClose={() => setIsTerminalOpen(false)}
         initialCommand={terminalInitialCmd}
-        onRefreshHealth={fetchHealth}
+        onRefreshHealth={recheckAgents}
       />
 
       <StartupProgressModal
