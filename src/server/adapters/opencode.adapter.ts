@@ -26,23 +26,30 @@ export class OpencodeAdapter implements AgentAdapter {
    * which is merged over the user's own config for this run only.
    */
   async runTurn(request: TurnRequest): Promise<TurnResult> {
+    const binary = this.getBinaryPath();
+    const version = await runCli(binary, ['--version'], { timeoutMs: 8000 });
+    const major = Number(version.stdout.match(/(?:^|\s)v?(\d+)\./)?.[1] || 1);
     const inlineConfig = {
       mcp: {
         ...Object.fromEntries(
           (request.extraMcpServers || [])
-            .filter(s => s.id !== 'board')
-            .map(s => [s.id, { type: 'local', command: [s.command, ...s.args], environment: s.env || {}, enabled: true }])
+            .filter(s => s.id !== (request.mcp.name || 'board'))
+            .map(s => [s.id, s.transport === 'http' ? { type: 'remote', url: s.url, headers: s.headers || {}, oauth: false, enabled: true } : { type: 'local', command: [s.command, ...s.args], environment: s.env || {}, enabled: true }])
         ),
-        board: {
+        [request.mcp.name || 'board']: {
           type: 'remote',
           url: request.mcp.url,
           enabled: true,
-          headers: { Authorization: `Bearer ${request.mcp.token}` }
+          oauth: false,
+          headers: request.mcp.token ? { Authorization: `Bearer ${request.mcp.token}` } : {}
         }
       },
       permission: { edit: 'allow', bash: 'allow', webfetch: 'allow' }
     };
-    const res = await runCli(this.getBinaryPath(), ['run', '--model', request.model, request.prompt], {
+    // V2 normally reuses a background service, whose environment cannot receive this
+    // turn's inline config or board token. A private server keeps concurrent turns apart.
+    const flags = major >= 2 ? ['--standalone', '--auto'] : [];
+    const res = await runCli(binary, ['run', ...flags, '--model', request.model, request.prompt], {
       cwd: request.cwd,
       timeoutMs: request.timeoutMs,
       env: { OPENCODE_CONFIG_CONTENT: JSON.stringify(inlineConfig) }

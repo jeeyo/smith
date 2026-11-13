@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { marked } from 'marked';
+import { marked, type Token, type TokensList } from 'marked';
 import DOMPurify from 'dompurify';
 import { Code, Eye, Copy, Check } from 'lucide-react';
 import { MermaidRenderer } from './ArtifactPreview.tsx';
@@ -10,7 +10,8 @@ interface MarkdownContentProps {
 }
 
 interface Segment {
-  type: 'markdown' | 'mermaid';
+  type: 'markdown' | 'mermaid' | 'code';
+  language?: string;
   text: string;
 }
 
@@ -67,32 +68,23 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, class
   const segments = useMemo<Segment[]>(() => {
     if (!content) return [];
 
-    const regex = /```mermaid[^\n]*\n([\s\S]*?)```/g;
+    const tokens = marked.lexer(content, { gfm: true, breaks: true });
     const parts: Segment[] = [];
-    let lastIndex = 0;
-    let match: RegExpExecArray | null;
-
-    while ((match = regex.exec(content)) !== null) {
-      if (match.index > lastIndex) {
-        parts.push({
-          type: 'markdown',
-          text: content.substring(lastIndex, match.index)
-        });
-      }
-      parts.push({
-        type: 'mermaid',
-        text: match[1].trim()
-      });
-      lastIndex = regex.lastIndex;
+    let pending: Token[] = [];
+    const flush = () => {
+      if (!pending.length) return;
+      const group = Object.assign(pending, { links: tokens.links }) as TokensList;
+      parts.push({ type: 'markdown', text: DOMPurify.sanitize(marked.parser(group, { gfm: true, breaks: true })) });
+      pending = [];
+    };
+    for (const token of tokens) {
+      if (token.type === 'code') {
+        flush();
+        const language = (token.lang || '').split(/\s/)[0];
+        parts.push({ type: language === 'mermaid' ? 'mermaid' : 'code', language, text: token.text });
+      } else pending.push(token);
     }
-
-    if (lastIndex < content.length) {
-      parts.push({
-        type: 'markdown',
-        text: content.substring(lastIndex)
-      });
-    }
-
+    flush();
     return parts;
   }, [content]);
 
@@ -105,14 +97,8 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, class
           return <InlineMermaid key={idx} content={seg.text} />;
         }
 
-        // Chat content includes agent/LLM output and file contents: marked passes raw HTML
-        // through, so it must be sanitized before it is injected into the app's origin.
-        const html = DOMPurify.sanitize(
-          marked.parse(seg.text, {
-            breaks: true,
-            gfm: true
-          }) as string
-        );
+        if (seg.type === 'code') return <CodeBlock key={idx} content={seg.text} language={seg.language}/>;
+        const html = seg.text;
 
         return (
           <div
@@ -123,4 +109,12 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, class
       })}
     </div>
   );
+};
+
+const CodeBlock: React.FC<{ content: string; language?: string }> = ({ content, language }) => {
+  const [copied, setCopied] = useState(false);
+  return <div className="my-3 rounded-xl border border-ink-200 overflow-hidden">
+    <div className="px-3 py-1.5 bg-ink-50 flex justify-between text-[11px] text-ink-500"><span>{language || 'Code'}</span><button type="button" aria-label="Copy code" onClick={async () => { try { await navigator.clipboard.writeText(content); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { setCopied(false); } }}>{copied ? 'Copied' : 'Copy'}</button></div>
+    <pre className="!m-0 !border-0 !rounded-none overflow-x-auto"><code className={language ? `language-${language}` : undefined}>{content}</code></pre>
+  </div>;
 };

@@ -16,6 +16,10 @@ import { worktreeRouter } from './routes/worktree.router.ts';
 import { costRouter } from './routes/cost.router.ts';
 import { goalRouter } from './routes/goal.router.ts';
 import { boardRouter } from './routes/board.router.ts';
+import { assistantRouter } from './smith-assistant.ts';
+import { smithMcpRouter } from './smith-mcp.ts';
+import { connectionsRouter, setSmithListeningPort, smithBaseUrl } from './mcp-connections.ts';
+import { smithEvents } from './smith-tools.ts';
 import { mcpRouter } from './mcp-server.ts';
 
 // Services
@@ -60,7 +64,10 @@ app.use(cors({ origin: (origin, cb) => cb(null, isAllowedOrigin(origin)) }));
 app.use(express.json({ limit: '2mb' }));
 
 // The board, for agent turns (MCP over HTTP, bearer token per turn)
-app.use('/mcp', mcpRouter);
+app.use('/mcp/board', mcpRouter);
+app.use('/mcp', smithMcpRouter);
+app.use('/api/v1', connectionsRouter);
+app.use('/api/v1', assistantRouter);
 
 // API Documentation
 app.get('/api/v1/openapi.json', (req, res) => res.json(openApiSpec));
@@ -177,6 +184,8 @@ function broadcastEvent(type: string, payload: any) {
   }
 }
 
+smithEvents.on('changed', data => broadcastEvent('smith:changed', data));
+
 // Wire Event Broadcasters
 costEngine.on('cost:updated', (data) => broadcastEvent('cost:updated', data));
 boardStore.on('changed', ({ sessionId, entry }) => {
@@ -223,6 +232,8 @@ if (!process.env.VITEST) {
   });
 
   server.listen(config.port, config.host, () => {
+    setSmithListeningPort((server.address() as { port: number }).port);
+    scheduler.mcpUrl = `${smithBaseUrl()}/mcp/board`;
     console.log(`Smith server listening on http://${config.host}:${config.port}`);
     console.log(`API documentation at http://${config.host}:${config.port}/api/docs`);
     // Goals that were running when the app closed pick up where the board left them.

@@ -34,9 +34,11 @@ export class ClaudeAdapter implements AgentAdapter {
       JSON.stringify({
         mcpServers: {
           ...Object.fromEntries(
-            (request.extraMcpServers || []).filter(s => s.id !== 'board').map(s => [s.id, { command: s.command, args: s.args, env: s.env || {} }])
+            (request.extraMcpServers || []).filter(s => s.id !== (request.mcp.name || 'board')).map(s => [s.id, s.transport === 'http'
+              ? { type: 'http', url: s.url, headers: s.headers || {} }
+              : { command: s.command, args: s.args, env: s.env || {} }])
           ),
-          board: { type: 'http', url: request.mcp.url, headers: { Authorization: `Bearer ${request.mcp.token}` } }
+          [request.mcp.name || 'board']: { type: 'http', url: request.mcp.url, headers: request.mcp.token ? { Authorization: `Bearer ${request.mcp.token}` } : {} }
         }
       }),
       { mode: 0o600 }

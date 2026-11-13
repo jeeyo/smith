@@ -213,3 +213,8 @@
   border: 1px solid #e3dfd7;
   margin: 0.5rem 0;
 }
+
+.markdown-body { overflow-wrap: anywhere; min-width: 0; }
+.markdown-body table { display: block; max-width: 100%; overflow-x: auto; }
+.markdown-body pre { max-width: 100%; white-space: pre; }
+.markdown-body input[type="checkbox"] { margin-right: 0.4em; }

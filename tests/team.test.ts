@@ -47,7 +47,7 @@ function makeRepo(spec?: object): string {
 /** A tool call the way an agent CLI makes it: JSON-RPC to /mcp with the turn's bearer token. */
 async function tool(req: TurnRequest, name: string, args: Record<string, unknown> = {}): Promise<any> {
   const res = await request(app)
-    .post('/mcp')
+    .post('/mcp/board')
     .set('Authorization', `Bearer ${req.mcp.token}`)
     .send({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } });
   const payload = JSON.parse(res.body.result.content[0].text);
@@ -124,7 +124,7 @@ afterAll(() => {
 
 describe('MCP endpoint', () => {
   it('rejects calls without a live turn token', async () => {
-    const res = await request(app).post('/mcp').send({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
+    const res = await request(app).post('/mcp/board').send({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
     expect(res.status).toBe(401);
   });
 });
@@ -145,7 +145,7 @@ describe('A leaderless team working a goal', () => {
 
     runWith(async (peer, req, t) => {
       if (!listed) {
-        listed = await request(app).post('/mcp').set('Authorization', `Bearer ${req.mcp.token}`).send({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
+        listed = await request(app).post('/mcp/board').set('Authorization', `Bearer ${req.mcp.token}`).send({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
       }
       expect(req.prompt).toContain(`You are @${peer.id}`);
       expect(req.prompt).toContain('docs/spec.md');
@@ -508,6 +508,24 @@ describe('Sessions', () => {
 });
 
 describe('A harness that fails to log in', () => {
+  it('stops retrying a startup failure before the harness reaches the board', async () => {
+    const repo = makeRepo({ tasks: [{ title: 'Review', description: 'review', acceptance: ['reviewed'], fileScope: ['review.md'] }] });
+    const session = await createSession(repo, [{ agentId: 'codex', model: 'gpt-6.1-sol' }]);
+    const board = boardStore.get(session.id);
+    let turns = 0;
+    runWith(async () => {
+      turns++;
+      return { ok: false, text: '', error: 'Managed policy rejects the requested sandbox mode' };
+    });
+    await request(app).post(`/api/v1/sessions/${session.id}/goal`).send({ goal: 'docs/spec.md' });
+    await until(() => !!board.data.goal.waitingReason || board.data.goal.status === 'paused', 'startup failure surfaced');
+    expect(turns).toBe(1);
+    expect(board.data.goal.waitingReason).toContain('Managed policy rejects');
+    expect(board.cards()[0].state).toBe('ready');
+    expect(board.cards()[0].bounces).toBe(0);
+    expect(agentHealthEngine.get('codex')?.status).toBe('error');
+  });
+
   it('stops being scheduled, tells the user what the CLI said, and resumes after a re-check', async () => {
     const repo = makeRepo({ tasks: [{ title: 'Anything', description: 'a', acceptance: ['a'], fileScope: ['a.txt'] }] });
     const session = await createSession(repo, [{ agentId: 'claude', model: 'opus' }], { reviewMode: 'fast' });

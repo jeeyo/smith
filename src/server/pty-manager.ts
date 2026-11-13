@@ -64,7 +64,8 @@ export class PTYManager extends EventEmitter {
   writePTY(ptyId: string, input: string) {
     const session = this.ptys.get(ptyId);
     if (session && session.process.stdin?.writable) {
-      session.process.stdin.write(input);
+      // This is a pipe, not a TTY: CRLF would leave a literal CR in the last argument.
+      session.process.stdin.write(input.replace(/\r\n/g, '\n'));
     }
   }
 

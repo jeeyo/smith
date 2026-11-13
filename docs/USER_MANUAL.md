@@ -8,7 +8,7 @@ Smith runs a team of coding agents on a goal you state. The agents are the CLIs 
 - At least one agent CLI installed and logged in. Smith finds `claude`, `codex` and `opencode` on your `PATH`; you can set exact paths in **App settings → Agent Binaries**.
 - A local Git repository to work in.
 
-Start the app from source with `npm run tauri:dev`, or the server and web UI with `npm run server` and `npm run dev`. The UI is at `http://localhost:4100` and the API reference at `http://localhost:4100/api/docs`.
+Start the app from source with `npm run tauri:dev`, or run `npm run server` and `npm run dev` in separate terminals. The development UI with live reload is at `http://localhost:5173` and the API reference at `http://localhost:4100/api/docs`. After `npm run build`, the server also serves the built UI at `http://localhost:4100`.
 
 The server listens on `127.0.0.1` only. Set the `HOST` environment variable if you deliberately want it reachable from other machines.
 
@@ -17,6 +17,8 @@ The server listens on `127.0.0.1` only. Set the `HOST` environment variable if y
 A session is an isolated Git worktree plus a team of workers. Create one with **New Session**:
 
 - **Name** and **repository path**. Smith creates a branch `smith/<name>-<id>` and a worktree for it under `.worktrees/` in the repository. Your own checkout is not touched.
+- **Browse** opens a folder selector. **Base branch** lists local and remote Git branches and initially selects the current branch.
+- Use the root of an existing Git repository and a base branch with at least one commit. If creation fails, the dialog keeps your entries so you can correct the path or branch and retry.
 - **Workers.** Each worker is a CLI and a model, for example Claude Code on Opus. Add as many as you like, including several on the same CLI. All workers are peers.
 - **Tier.** A number from 1 to 3 saying how capable the worker's model is. Smith suggests one from the model name and you can change it. Tiers only matter if you mix stronger and weaker models: a card can require a minimum tier.
 - **Review mode** (section 6).
@@ -151,6 +153,8 @@ If every worker is away, the goal waits and the board shows the earliest reset t
 
 Smith recognises a usage limit by matching the CLI's error text. If a CLI changes its wording, the turn is treated as an ordinary failure instead.
 
+If a CLI fails before reaching the board, Smith stops scheduling that harness and shows its error. Correct the CLI configuration, then re-check the agent CLIs to try again.
+
 ## 9. Finishing
 
 ![A verified goal with the diff summary and the merge button](images/goal-complete.png)
@@ -170,10 +174,12 @@ Deleting a session removes its worktrees and its board. The session branch stays
 - **App & Workspace:** Git path, default repository path, server port, display currency.
 - **Skills and tools** (sliders icon, per session). Changes apply from each worker's next turn.
   - **Skills** are conventions added to the worker's instructions.
-  - **MCP servers** are started by the worker's CLI for its turn, for Claude Code, Codex and OpenCode workers alike. A server that needs a value, such as the PostgreSQL connection string or a GitHub token, asks for it and cannot be switched on without it. Secret values are stored with the session on this machine and shown masked. The filesystem server is limited to the directory the worker's turn runs in.
+  - **MCP servers** support local commands (stdio) and remote Streamable HTTP endpoints, for Claude Code, Codex and OpenCode workers alike. Use **Add third-party MCP server**, enter the command and JSON arguments/environment or endpoint and optional JSON headers, then enable it and Apply. Remote connections run through Smith’s credential broker. A server that needs a value, such as the PostgreSQL connection string or a GitHub token, asks for it and cannot be switched on without it. Secret values are stored with the session on this machine and shown masked. The filesystem server is limited to the directory the worker's turn runs in.
   - **Plugins** switch on a set of skills and servers together; the servers they bring are marked "On through" the plugin.
   - Each skill, server or plugin applies to all workers, or to the ones you pick under it.
-  - Skills and servers added through the API (`POST /api/v1/customizations/skills`, `/mcp`) are kept in `~/.smith/catalog.json`.
+  - **Install a third-party skill** accepts a local skill directory, a `SKILL.md` path, a direct Markdown URL, or a GitHub/GitLab repository/subfolder URL. It immediately enables the skill in this session. Full packages include `scripts/`, `references/` and `assets/`; importing does not execute scripts. Imports are limited to 10 MiB/1,000 files and reject symlinks. A repository URL must point to a directory containing `SKILL.md`.
+  - For an HTTP server with **Use OAuth**, click **Connect OAuth**, then **Authorize in browser**. Smith discovers the provider and uses PKCE. If dynamic registration is unavailable, enter the provider’s client ID, optional secret and scope when adding the server. Register `http://127.0.0.1:4100/api/v1/mcp/oauth/callback` as the redirect URI (substitute the configured port). **Test connection** lists available tools; **Disconnect** forgets saved OAuth credentials. Access tokens refresh in Smith without passing them to agent CLIs.
+  - Skills and servers are kept in `~/.smith/catalog.json`; copied skill packages live in `~/.smith/skills/`. OAuth credentials live in `~/.smith/mcp-oauth.json`. Credential-bearing files use owner-only permissions. API responses mask credentials.
 
 Settings are stored in `~/.smith/config.json`. Sessions, boards, chats and specs typed in the chat are under `~/.smith/`.
 
@@ -183,7 +189,36 @@ Claude Code reports real token usage for each turn, and Smith prices it from its
 
 ## 12. Known limits
 
-- Only Claude Code has been run end to end against the board. Codex and OpenCode are wired up from their documented options and may need adjusting.
-- Agents run with their permission prompts disabled so they can work unattended. They can run commands and change files anywhere your user account can. Use repositories and machines where that is acceptable.
+- OpenCode 2 turns use a private server so each worker receives its own board connection and credentials. OpenCode 1 uses its original one-shot run mode.
+- Codex turns use managed approval within its workspace sandbox and honor local policy. Claude Code and OpenCode can run commands and change files anywhere your user account can. Use repositories and machines where that is acceptable.
 - The in-app terminal is a plain shell without a TTY. Logins that need one are better done in your own terminal.
 - File scopes are checked when a card is submitted, not while the worker is editing.
+
+
+## Ask Smith
+
+Open **Ask Smith** in the top bar, or type a setup request on the empty home screen. Select the assistant harness and model, then send a prompt such as:
+
+> Start a session on feature/review branch in this folder /Users/me/code/project with 2 Claude Sonnets and 1 GPT 6.1 Sol
+
+> Install this skill https://github.com/owner/repo/tree/main/skills/reviewer to this session
+
+Smith uses its management tools to carry out the request. Creating a session leaves the workers idle until you give them a coding goal. The created session becomes current; a follow-up skill installation targets it. You can also paste a local skill path. Setup requests sent from the home screen or an existing session chat run directly in Ask Smith. **New chat** clears the assistant conversation; closing the dialog lets an active request continue. Requests interrupted by a server restart are reported and are not automatically resubmitted.
+
+Both user and assistant messages, board descriptions and result summaries render Markdown, including tables, fenced code with copy buttons, and Mermaid diagrams. Raw HTML is sanitized.
+
+## External MCP clients
+
+Smith serves a **stateless Streamable HTTP MCP endpoint with no authentication** at `http://127.0.0.1:4100/mcp`. Each POST is independent; there is no MCP session ID or persistent GET stream. The default server binds to loopback and validates browser origins. External local clients need no bearer token:
+
+```json
+{
+  "mcpServers": {
+    "smith": { "type": "http", "url": "http://127.0.0.1:4100/mcp" }
+  }
+}
+```
+
+Use your client’s Streamable HTTP configuration format. Append `?sessionId=smith-...` to supply a default session, or pass `sessionId` to each tool. `tools/list` describes the complete argument schemas. Tools cover folder/branch/model discovery, session creation and worker changes, goals and boards, skill installation, MCP registration/connection/testing, customization targeting, and worktree diff/commit/merge/discard. These tools can change local repositories; clients have the same management access as the local UI.
+
+All Smith workers receive this endpoint as the `smith` MCP server. Their peer-specific board tools use the separate `/mcp/board` endpoint with short-lived per-turn tokens.

@@ -145,6 +145,10 @@ export const GoalChat: React.FC<GoalChatProps> = ({
             A session is an isolated git worktree and a team of agent workers. Create one, then state a goal and the team plans and works it on a shared board.
           </p>
         </div>
+        <form className="w-full max-w-xl flex gap-2" onSubmit={event => { event.preventDefault(); if (input.trim()) { onSendGoal(input.trim()); setInput(''); } }}>
+          <textarea aria-label="Ask Smith to set up a session" value={input} onChange={event => setInput(event.target.value)} placeholder="Start a session on main in /path/to/repo with 2 Claude Sonnets and 1 GPT 6.1 Sol…" className="flex-1 rounded-xl p-3 bg-ink-0 border border-ink-200 text-sm" rows={3}/>
+          <button type="submit" disabled={!input.trim()} className="px-3 bg-lav-100 text-lav-700 rounded-xl disabled:opacity-50">Ask Smith</button>
+        </form>
         <button onClick={onOpenNewSession} className="px-4 py-2 rounded-xl bg-lav-200 hover:bg-lav-300 text-lav-700 text-xs font-medium transition-colors">
           New session
         </button>
@@ -185,7 +189,7 @@ export const GoalChat: React.FC<GoalChatProps> = ({
         {messages.map(msg =>
           msg.sender === 'user' ? (
             <div key={msg.id} className="flex justify-end">
-              <div className="max-w-[85%] px-3.5 py-2.5 rounded-2xl rounded-br-md bg-lav-100 text-ink-900 text-[12.5px] whitespace-pre-wrap">{msg.content}</div>
+              <div className="max-w-[85%] min-w-0 px-3.5 py-2.5 rounded-2xl rounded-br-md bg-lav-100 text-ink-900 text-[12.5px]"><MarkdownContent content={msg.content} /></div>
             </div>
           ) : (
             <div key={msg.id} className="max-w-[94%]">

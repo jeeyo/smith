@@ -69,7 +69,7 @@ class SessionStore {
     this.sessions.set(session.id, session);
     const file = path.join(this.dir, `${session.id}.json`);
     const tmp = `${file}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(session, null, 2));
+    fs.writeFileSync(tmp, JSON.stringify(session, null, 2), { mode: 0o600 });
     fs.renameSync(tmp, file);
   }
 

@@ -104,11 +104,11 @@ function saveAdded() {
     mcpServers: Array.from(globalMCPs.values()).filter(s => !builtInServers.has(s.id))
   };
   const tmp = `${catalogFile}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 });
   fs.renameSync(tmp, catalogFile);
 }
 
-export const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
+export const SAFE_ID = /^(?!__proto__$|constructor$|prototype$)[A-Za-z0-9_-]{1,64}$/;
 
 export function addSkill(skill: Skill) {
   globalSkills.set(skill.id, skill);
@@ -129,6 +129,9 @@ export interface ResolvedServer {
   command: string;
   args: string[];
   env?: Record<string, string>;
+  transport?: 'stdio' | 'http';
+  url?: string;
+  headers?: Record<string, string>;
 }
 
 export interface ResolvedCustomizations {
@@ -151,7 +154,7 @@ function fill(text: string, vars: Record<string, string>): string {
 }
 
 /** The servers a session has on, directly or through a plugin, with their saved values. */
-function serversInUse(custom: SessionCustomizations, peerId?: string): Array<{ server: CustomMCPServer; values?: Record<string, string> }> {
+export function serversInUse(custom: SessionCustomizations, peerId?: string): Array<{ server: CustomMCPServer; values?: Record<string, string> }> {
   const out = new Map<string, { server: CustomMCPServer; values?: Record<string, string> }>();
   for (const s of Object.values(custom.mcpServers || {})) {
     if (!s.enabled) continue;
@@ -197,9 +200,12 @@ export function resolveFor(custom: SessionCustomizations | undefined, peerId: st
     const vars = { ...(values || {}), WORKDIR: workdir };
     mcpServers.push({
       id: server.id,
+      transport: server.transport || 'stdio',
       command: server.command,
       args: (server.args || []).map(a => fill(a, vars)),
-      env: server.env ? Object.fromEntries(Object.entries(server.env).map(([k, v]) => [k, fill(v, vars)])) : undefined
+      env: server.env ? Object.fromEntries(Object.entries(server.env).map(([k, v]) => [k, fill(v, vars)])) : undefined,
+      url: server.url ? fill(server.url, vars) : undefined,
+      headers: server.headers ? Object.fromEntries(Object.entries(server.headers).map(([k, v]) => [k, fill(v, vars)])) : undefined
     });
   }
   return { skills, mcpServers };
@@ -223,6 +229,43 @@ export function customizationProblems(custom: SessionCustomizations): string[] {
 
 export const SECRET_MASK = '••••••••';
 
+export function maskServer(server: CustomMCPServer): CustomMCPServer {
+  return {
+    ...server,
+    env: server.env ? Object.fromEntries(Object.entries(server.env).map(([key, value]) => [key, value.includes('${') ? value : SECRET_MASK])) : undefined,
+    headers: server.headers ? Object.fromEntries(Object.entries(server.headers).map(([key, value]) => [key, value.includes('${') ? value : SECRET_MASK])) : undefined,
+    oauth: server.oauth ? { ...server.oauth, clientSecret: server.oauth.clientSecret ? SECRET_MASK : undefined } : undefined
+  };
+}
+
+/** Accept a third-party command or Streamable HTTP server, without executing it. */
+export function serverDefinition(input: any): CustomMCPServer {
+  if (!input || !SAFE_ID.test(String(input.id || '')) || ['board', 'smith'].includes(input.id)) throw new Error('Choose an id using letters, digits, "-" or "_"; board and smith are reserved.');
+  const transport = input.transport === 'http' || input.url ? 'http' : 'stdio';
+  if (!String(input.name || '').trim()) throw new Error('Server name is required.');
+  if (transport === 'http') {
+    const url = new URL(String(input.url || ''));
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.hash) throw new Error('Use an HTTP(S) MCP endpoint without embedded credentials or a fragment.');
+  } else if (typeof input.command !== 'string' || !input.command.trim()) throw new Error('A command is required for a stdio server.');
+  if (input.args !== undefined && (!Array.isArray(input.args) || !input.args.every((arg: unknown) => typeof arg === 'string'))) throw new Error('Arguments must be a JSON array of strings.');
+  for (const key of ['env', 'headers']) {
+    const value = input[key];
+    if (value !== undefined && (!value || typeof value !== 'object' || Array.isArray(value) || !Object.values(value).every(v => typeof v === 'string'))) throw new Error(`${key} must be a JSON object with string values.`);
+  }
+  const strings = (value: unknown) => value && typeof value === 'object' && !Array.isArray(value)
+    ? Object.fromEntries(Object.entries(value).map(([key, val]) => [key, String(val)])) : undefined;
+  return {
+    id: String(input.id), name: String(input.name).trim(), transport,
+    command: transport === 'stdio' ? input.command.trim() : '',
+    args: Array.isArray(input.args) ? input.args.map(String) : [], env: strings(input.env),
+    url: transport === 'http' ? String(input.url) : undefined, headers: strings(input.headers),
+    auth: input.auth === 'oauth' && transport === 'http' ? 'oauth' : 'none',
+    oauth: input.oauth ? { clientId: input.oauth.clientId ? String(input.oauth.clientId) : undefined, clientSecret: input.oauth.clientSecret ? String(input.oauth.clientSecret) : undefined, scope: input.oauth.scope ? String(input.oauth.scope) : undefined } : undefined,
+    description: String(input.description || ''), enabled: input.enabled === true,
+    inputs: Array.isArray(input.inputs) ? input.inputs.filter((item: any) => item && SAFE_ID.test(String(item.key))).map((item: any) => ({ key: String(item.key), label: String(item.label || item.key), secret: !!item.secret, placeholder: item.placeholder ? String(item.placeholder) : undefined })) : undefined
+  };
+}
+
 function secretKeys(serverId: string, server?: CustomMCPServer): Set<string> {
   const def = globalMCPs.get(serverId) || server;
   return new Set((def?.inputs || []).filter(i => i.secret).map(i => i.key));
@@ -234,7 +277,7 @@ export function maskCustomizations(custom: SessionCustomizations): SessionCustom
   for (const [id, s] of Object.entries(custom.mcpServers || {})) {
     const secrets = secretKeys(id, s);
     mcpServers[id] = {
-      ...s,
+      ...maskServer(s),
       values: s.values
         ? Object.fromEntries(Object.entries(s.values).map(([k, v]) => [k, secrets.has(k) && v ? SECRET_MASK : v]))
         : undefined
