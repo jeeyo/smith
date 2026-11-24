@@ -58,6 +58,19 @@ describe('stateless public Smith MCP and workspace selectors', () => {
     expect((await request(app).post('/mcp').set('Origin', 'https://evil.example').send({})).status).toBe(403);
     expect((await client.callTool({ name: 'session_create', arguments: { name: 'invalid' } })).isError).toBe(true);
   });
+  it('offers workers only the read-only tools', async () => {
+    const worker = new Client({ name: 'worker', version: '1' });
+    await worker.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp?role=worker`)));
+    try {
+      const names = (await worker.listTools()).tools.map(t => t.name);
+      expect(names).toEqual(expect.arrayContaining(['board_read', 'session_get', 'worktree_diff']));
+      for (const name of ['card_answer', 'session_delete', 'session_workers_set', 'worktree_merge', 'worktree_discard', 'goal_send']) {
+        expect(names).not.toContain(name);
+      }
+      const denied = await worker.callTool({ name: 'card_answer', arguments: { sessionId: 'x', cardId: 'c1', answer: 'yes' } });
+      expect(denied.isError).toBe(true);
+    } finally { await worker.close(); }
+  });
   it('browses folders and branches without changing the checkout', async () => {
     const folders = await tool('folders_list', { path: scratch });
     expect(folders.folders.find((f: any) => f.name === 'repo').isRepository).toBe(true);

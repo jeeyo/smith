@@ -93,7 +93,8 @@ export const BOARD_TOOLS: ToolDefinition[] = [
   },
   {
     name: 'card_split',
-    description: 'Replace a card with two or more smaller cards. Cards that waited for the original wait for all parts.',
+    description:
+      "Replace a card with two or more smaller cards. Cards that waited for the original wait for all parts. The original card's branch and worktree are deleted, so any work already on it is lost; release the card instead if that work should be kept.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -410,34 +411,64 @@ export class BoardTools {
     return { ok: true, outcome: 'done' };
   }
 
+  private merging: Set<string> = new Set();
+
+  /** True while a card's merge is queued or running. */
+  isMerging(sessionId: string, cardId: string): boolean {
+    return this.merging.has(`${sessionId}:${cardId}`);
+  }
+
+  /** Merges handed-in cards that nothing else will finish, for example after a restart. */
+  resumeMerges(sessionId: string): number {
+    const session = getSession(sessionId);
+    if (!session || !boardStore.has(sessionId)) return 0;
+    const board = boardStore.get(sessionId);
+    const due = board.awaitingMerge().filter(c => !this.isMerging(sessionId, c.id));
+    for (const card of due) {
+      this.merge(board, session, card.id).catch(err => console.error(`[board] merge of ${card.id} failed:`, err));
+    }
+    return due.length;
+  }
+
   /** Merges a card's branch into the session branch, or opens a conflict card if it cannot. */
   private merge(board: Board, session: Session, cardId: string): Promise<Record<string, unknown>> {
+    const key = `${session.id}:${cardId}`;
+    this.merging.add(key);
     return inSessionQueue(session.id, async () => {
       const card = board.card(cardId);
-      if (!card.branch || !(await this.isManaged(session))) {
-        board.merged(cardId);
-        return { outcome: 'done' };
+      if (card.state !== 'in_review') return { outcome: card.state };
+      try {
+        if (!card.branch || !(await this.isManaged(session))) {
+          board.merged(cardId);
+          return { outcome: 'done' };
+        }
+        const result = await worktreeManager.mergeCardBranch(session.worktree.path, card.branch, `Merge ${card.id}: ${card.title}`);
+        if (result.ok) {
+          const workspace = { branch: card.branch, path: card.worktreePath };
+          board.merged(cardId, result.commit);
+          await this.dropWorkspace(board, session, cardId, workspace);
+          return { outcome: 'done', commit: result.commit };
+        }
+        const conflict = board.mergeConflicted(cardId, result.files, result.error);
+        return {
+          outcome: 'merge_conflict',
+          conflictCardId: conflict.id,
+          note: `The merge ${result.files.length > 0 ? `conflicted in ${result.files.join(', ')}` : 'failed'}. A card was opened to resolve it.`
+        };
+      } catch (err: any) {
+        board.mergeFailed(cardId, err?.message || String(err));
+        return { outcome: 'merge_failed', note: `The merge failed (${err?.message || err}); ${cardId} went back to the board.` };
       }
-      const result = await worktreeManager.mergeCardBranch(session.worktree.path, card.branch, `Merge ${card.id}: ${card.title}`);
-      if (result.ok) {
-        const workspace = { branch: card.branch, path: card.worktreePath };
-        board.merged(cardId, result.commit);
-        await this.dropWorkspace(board, session, cardId, workspace);
-        return { outcome: 'done', commit: result.commit };
-      }
-      const conflict = board.mergeConflicted(cardId, result.files);
-      return {
-        outcome: 'merge_conflict',
-        conflictCardId: conflict.id,
-        note: `The merge conflicted in ${result.files.join(', ') || 'unknown files'}. A card was opened to resolve it.`
-      };
-    });
+    }).finally(() => this.merging.delete(key));
   }
 
   private async reviewVerdict(board: Board, session: Session, peerId: PeerId, cardId: string, pass: boolean, findings: string) {
     const verdict = board.reviewVerdict(peerId, cardId, pass, findings);
     if (verdict.outcome === 'rejected') {
       return { ok: true, outcome: 'rejected', note: `${verdict.targetId} went back to the board with your findings.` };
+    }
+    if (verdict.outcome === 'stale') {
+      return { ok: true, outcome: 'stale', note: `${verdict.targetId} is no longer waiting for review, so this review card was closed with your findings.` };
     }
     return { ok: true, ...(await this.merge(board, session, verdict.targetId)) };
   }

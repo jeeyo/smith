@@ -16,7 +16,7 @@ The server listens on `127.0.0.1` only. Set the `HOST` environment variable if y
 
 A session is an isolated Git worktree plus a team of workers. Create one with **New Session**:
 
-- **Name** and **repository path**. Smith creates a branch `smith/<name>-<id>` and a worktree for it under `.worktrees/` in the repository. Your own checkout is not touched.
+- **Name** and **repository path**. Smith creates a branch `smith/<name>-<id>` and a worktree for it under `.worktrees/` in the repository. Your own checkout is not touched while the team works. Merging the session into its base branch is the exception: it checks out the base branch in your repository and merges there.
 - **Browse** opens a folder selector. **Base branch** lists local and remote Git branches and initially selects the current branch.
 - Use the root of an existing Git repository and a base branch with at least one commit. If creation fails, the dialog keeps your entries so you can correct the path or branch and retry.
 - **Workers.** Each worker is a CLI and a model, for example Claude Code on Opus. Add as many as you like, including several on the same CLI. All workers are peers.
@@ -124,7 +124,7 @@ When a card is done its branch is merged into the session branch. If the merge c
 
 Change the mode at any time from the board header; it applies to cards submitted afterwards. With a single worker there is nobody else to review, so no cards are reviewed.
 
-In every mode, once all cards are finished, one worker runs the spec's verify commands and reports each exit code. The goal is complete when that passes. If it fails, the worker creates cards for what is wrong and the team continues.
+In every mode, once all cards are finished, one worker runs the spec's verify commands and reports each exit code. The goal is complete when that passes and no new cards were added meanwhile; otherwise the new cards are worked and verification runs again. If it fails, the worker creates cards for what is wrong and the team continues.
 
 ## 7. When the team needs you
 
@@ -135,13 +135,13 @@ A card moves to **Needs you** when:
 - a worker asks a question, including whenever the spec looks wrong or incomplete;
 - a card has come back three times without being finished;
 - nobody has taken a card for 30 minutes while workers were idle;
-- no worker on the team meets the card's minimum tier.
+- no worker on the team meets the card's minimum tier (lowering the tier on the card also releases it).
 
 The question appears in the chat and on the card. Answer on the card, or just type in the chat if only one card is waiting. With several waiting, start the message with the card id, for example `c4: use JSON`.
 
 Anything else you type while a goal is running becomes a new card for the team.
 
-The goal **pauses** when the team has used its turn budget (60 turns) or plan-edit budget (40 edits), or when no worker can move any open card. Read the reason on the board, then press **Resume** or type `resume`.
+The goal **pauses** when the team has used its plan-edit budget (40 edits), or when no worker can move any open card. Read the reason on the board, then press **Resume** or type `resume`.
 
 ## 8. Usage limits
 
@@ -219,6 +219,6 @@ Smith serves a **stateless Streamable HTTP MCP endpoint with no authentication**
 }
 ```
 
-Use your client’s Streamable HTTP configuration format. Append `?sessionId=smith-...` to supply a default session, or pass `sessionId` to each tool. `tools/list` describes the complete argument schemas. Tools cover folder/branch/model discovery, session creation and worker changes, goals and boards, skill installation, MCP registration/connection/testing, customization targeting, and worktree diff/commit/merge/discard. These tools can change local repositories; clients have the same management access as the local UI.
+Use your client’s Streamable HTTP configuration format. Append `?sessionId=smith-...` to supply a default session, or pass `sessionId` to each tool. `tools/list` describes the complete argument schemas. Tools cover folder/branch/model discovery, session creation and worker changes, goals and boards, skill installation, MCP registration/connection/testing, customization targeting, and worktree diff/commit/merge/discard. These tools can change local repositories; clients have the same management access as the local UI. Board workers are given the read-only subset (`?role=worker`): they cannot answer card questions, change the team or goal, or commit, merge or discard.
 
 All Smith workers receive this endpoint as the `smith` MCP server. Their peer-specific board tools use the separate `/mcp/board` endpoint with short-lived per-turn tokens.

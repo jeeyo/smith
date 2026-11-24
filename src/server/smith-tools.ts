@@ -40,17 +40,33 @@ const definitions: Tool[] = [
   { name: 'worktree_diff', description: 'Read the session worktree diff.', schema: z.object(session).strict(), route: sessionRoute('/worktree/diff') },
   { name: 'worktree_commit', description: 'Commit changes in the session worktree when explicitly requested.', schema: z.object({ ...session, message: text }).strict(), method: 'POST', route: sessionRoute('/worktree/commit'), body: a => ({ message: a.message }) },
   { name: 'worktree_merge', description: 'Merge the session branch into its base branch. Changes the local repository; only use on an explicit merge request.', schema: z.object(session).strict(), method: 'POST', route: sessionRoute('/worktree/merge') },
-  { name: 'worktree_discard', description: 'Discard the session worktree and branch. Only use on an explicit discard request.', schema: z.object(session).strict(), method: 'POST', route: sessionRoute('/worktree/discard') }
+  { name: 'worktree_discard', description: 'Discard uncommitted changes in the session worktree (reset to its last commit and delete untracked files). The worktree, branch and commits stay. Only use on an explicit discard request.', schema: z.object(session).strict(), method: 'POST', route: sessionRoute('/worktree/discard') }
 ];
 
-export const SMITH_TOOLS = definitions.map(tool => {
+/**
+ * What a board worker may call. Answering questions, merging, discarding and changing the team
+ * or its goal are the user's decisions; a worker that could make them would bypass the board.
+ */
+const WORKER_TOOLS = new Set([
+  'folders_list', 'branches_list', 'models_list', 'sessions_list', 'session_get', 'board_read',
+  'catalog_list', 'customizations_get', 'mcp_connection', 'mcp_test', 'worktree_diff'
+]);
+
+export type SmithRole = 'user' | 'worker';
+const allowed = (name: string, role: SmithRole) => role === 'user' || WORKER_TOOLS.has(name);
+
+const SMITH_TOOLS = definitions.map(tool => {
   const { $schema: _, ...inputSchema } = z.toJSONSchema(tool.schema, { target: 'draft-7' });
   return { name: tool.name, description: tool.description, inputSchema: inputSchema as { type: 'object'; [key: string]: unknown } };
 });
 
-export async function callSmithTool(name: string, input: unknown, context: ToolContext = {}) {
+export function smithToolsFor(role: SmithRole) {
+  return SMITH_TOOLS.filter(tool => allowed(tool.name, role));
+}
+
+export async function callSmithTool(name: string, input: unknown, context: ToolContext = {}, role: SmithRole = 'user') {
   const tool = definitions.find(item => item.name === name);
-  if (!tool) throw new Error(`Unknown Smith tool: ${name}`);
+  if (!tool || !allowed(name, role)) throw new Error(`Unknown Smith tool: ${name}`);
   const args = tool.schema.parse(input || {});
   const current = context.chatId ? assistantContexts.get(context.chatId) || context : context;
   const method = tool.method || 'GET';

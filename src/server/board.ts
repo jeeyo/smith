@@ -488,6 +488,10 @@ export class Board {
     this.data.goal.pauseReason = undefined;
     this.data.counters.planEdits = 0;
     this.data.counters.turns = 0;
+    // Time spent paused is not time a ready card waited for an idle peer.
+    for (const card of this.cards()) {
+      if (card.state === 'ready') card.readySince = this.now();
+    }
     this.record('user', 'goal_resumed');
   }
 
@@ -510,6 +514,11 @@ export class Board {
     const card = this.card(cardId);
     if (RESOLVED.includes(card.state)) throw new BoardError('bad_state', `${cardId} is ${card.state} and cannot be changed`);
     this.applyPatch(card, patch);
+    // A card escalated because nobody met its tier is released once the user lowers the tier.
+    if (card.state === 'needs_user' && 'minTier' in patch && this.activePeers().some(p => !card.minTier || p.tier >= card.minTier)) {
+      card.resumeState = undefined;
+      this.setReady(card);
+    }
     this.addNote(card, 'user', 'decision', `The user changed ${Object.keys(patch).join(', ')}.`);
     this.record('user', 'edited', { cardId, detail: Object.keys(patch).join(', '), plan: true });
   }
@@ -528,12 +537,7 @@ export class Board {
     this.record('user', 'review_mode_set', { detail: mode });
   }
 
-  /** Counts a turn; returns false when the turn cap is reached and the goal has been paused. */
-  countTurn(peerId: PeerId): boolean {
-    if (this.data.counters.turns >= this.data.limits.maxTurns) {
-      this.pause(`The team has used ${this.data.counters.turns} turns on this goal. Review the board and resume to continue.`);
-      return false;
-    }
+  countTurn(peerId: PeerId) {
     this.data.counters.turns += 1;
     const peer = this.data.peers[peerId];
     if (peer) peer.turns += 1;
@@ -543,7 +547,6 @@ export class Board {
         card.leaseExpiresAt = this.now() + this.data.limits.leaseMs;
       }
     }
-    return true;
   }
 
   // ---- reading --------------------------------------------------------------------------
@@ -711,10 +714,15 @@ export class Board {
     if (card.kind === 'verify') {
       const passed = input.passed === true;
       this.finish(card, { summary, passed });
-      if (passed) {
+      // Work added while verification ran has not been verified; another verify follows it.
+      if (passed && this.openCards().length === 0) {
         this.data.goal.status = 'completed';
         this.data.goal.completedAt = this.now();
         this.record(peerId, 'goal_completed', { cardId, detail: summary });
+        return { outcome: 'done' };
+      }
+      if (passed) {
+        this.record(peerId, 'verified', { cardId, detail: summary });
         return { outcome: 'done' };
       }
       this.record(peerId, 'verify_failed', { cardId, detail: summary });
@@ -774,7 +782,7 @@ export class Board {
   }
 
   /** The card's branch did not merge cleanly: a peer has to resolve it. */
-  mergeConflicted(cardId: string, files: string[]): Card {
+  mergeConflicted(cardId: string, files: string[], error?: string): Card {
     const card = this.card(cardId);
     const targetId = card.kind === 'merge-conflict' && card.targetId ? card.targetId : card.id;
     const target = this.card(targetId);
@@ -783,19 +791,40 @@ export class Board {
       card.state = 'cancelled';
       card.updatedAt = this.now();
     }
+    const where = files.length > 0 ? `conflicted in: ${files.join(', ')}` : `failed without a file conflict${error ? `: ${error.slice(0, 400)}` : ''}`;
     const conflict = this.newCard(
       {
         kind: 'merge-conflict',
         title: `Resolve merge conflict: ${target.title}`,
-        description: `Merging ${target.id} into the session branch conflicted in: ${files.join(', ') || 'unknown files'}. The session branch has been merged into this card's worktree and the conflict markers are in the files. Resolve them so both changes are kept, then submit.`,
+        description: `Merging ${target.id} into the session branch ${where}. The session branch has been merged into this card's worktree and any conflict markers are in the files. Resolve them so both changes are kept, then submit.`,
         acceptance: ['No conflict markers remain', `The acceptance criteria of ${target.id} still hold`],
         fileScope: files.length > 0 ? files : target.fileScope
       },
       'board',
       { targetId }
     );
+    if (card.kind === 'merge-conflict') {
+      // Repeated failed resolutions count against one limit instead of starting over each time.
+      conflict.bounces = card.bounces;
+      conflict.failedBy = card.author ? Array.from(new Set([...card.failedBy, card.author])) : [...card.failedBy];
+      this.bounce(conflict, undefined, `The previous resolution (${card.id}) did not merge either.`);
+    }
     this.record('board', 'merge_conflict', { cardId: targetId, detail: `${conflict.id}: ${files.join(', ')}` });
     return conflict;
+  }
+
+  /** The merge itself could not run (not a conflict): the work goes back to the board. */
+  mergeFailed(cardId: string, why: string) {
+    const card = this.card(cardId);
+    if (card.state !== 'in_review') return;
+    this.bounce(card, card.author, `The merge into the session branch failed: ${why.slice(0, 400)}`);
+    this.record('board', 'merge_failed', { cardId, reason: why.slice(0, 200) });
+  }
+
+  /** Cards that were handed in but have no review or conflict card that would finish them. */
+  awaitingMerge(): Card[] {
+    const open = this.openCards();
+    return open.filter(c => c.state === 'in_review' && !open.some(o => o.targetId === c.id));
   }
 
   private bounce(card: Card, peerId: PeerId | undefined, why: string) {
@@ -1030,12 +1059,26 @@ export class Board {
     this.record(peerId, 'delegated', { cardId, reason: reason.trim(), detail: toPeer });
   }
 
-  reviewVerdict(peerId: PeerId, reviewCardId: string, pass: boolean, findings: string): { outcome: 'merge' | 'rejected'; targetId: string } {
+  reviewVerdict(
+    peerId: PeerId,
+    reviewCardId: string,
+    pass: boolean,
+    findings: string
+  ): { outcome: 'merge' | 'rejected' | 'stale'; targetId: string } {
     const review = this.ownedClaimed(peerId, reviewCardId);
     if (review.kind !== 'review' || !review.targetId) throw new BoardError('invalid', `${reviewCardId} is not a review card`);
     if (!findings?.trim()) throw new BoardError('invalid', 'A verdict needs findings, even when it passes');
     const target = this.card(review.targetId);
     const text = findings.trim();
+    if (target.state !== 'in_review') {
+      review.state = 'cancelled';
+      review.owner = undefined;
+      review.leaseExpiresAt = undefined;
+      review.updatedAt = this.now();
+      this.addNote(review, 'board', 'decision', `${target.id} is ${target.state} and no longer waiting for this review. Findings: ${text}`);
+      this.record(peerId, 'review_stale', { cardId: review.id, detail: target.id });
+      return { outcome: 'stale', targetId: target.id };
+    }
     this.addNote(review, peerId, 'result', text);
     this.finish(review, { summary: `${pass ? 'Passed' : 'Rejected'}: ${text.slice(0, MAX_SUMMARY_CHARS)}`, passed: pass });
     if (pass) {
@@ -1053,7 +1096,9 @@ export class Board {
     this.activePeer(peerId);
     const card = this.card(cardId);
     if (card.owner && card.owner !== peerId) throw new BoardError('not_owner', `${cardId} is held by @${card.owner}`);
-    if (RESOLVED.includes(card.state) || card.state === 'needs_user') throw new BoardError('bad_state', `${cardId} is ${card.state}`);
+    if (RESOLVED.includes(card.state) || card.state === 'needs_user' || card.state === 'in_review') {
+      throw new BoardError('bad_state', `${cardId} is ${card.state}`);
+    }
     if (!question?.trim()) throw new BoardError('invalid', 'ask_user needs a question');
     card.resumeState = 'ready';
     card.owner = undefined;
@@ -1089,8 +1134,8 @@ export class Board {
   unclaim(cardId: string, why: string) {
     const card = this.card(cardId);
     if (card.state !== 'claimed') return;
-    this.addNote(card, 'board', 'decision', why);
-    this.setReady(card);
+    // Counts as a bounce so a workspace that can never be built ends with the user, not in a loop.
+    this.bounce(card, card.owner, why);
     this.record('board', 'unclaimed', { cardId, reason: why });
   }
 
@@ -1133,11 +1178,11 @@ export class Board {
   }
 
   /** Ready cards nobody has taken in time, or that no peer on the team may take, go to the user. */
-  escalateOrphans(idlePeers: PeerId[]): string[] {
+  escalateOrphans(idlePeers: PeerId[], beingTaken: Set<string> = new Set()): string[] {
     const now = this.now();
     const escalated: string[] = [];
     for (const card of this.cards()) {
-      if (card.state !== 'ready') continue;
+      if (card.state !== 'ready' || beingTaken.has(card.id)) continue;
       const noTier = card.minTier !== undefined && !this.activePeers().some(p => p.tier >= card.minTier!);
       const waited = card.readySince !== undefined && now - card.readySince >= this.data.limits.readyWaitMs && idlePeers.length > 0;
       if (!noTier && !waited) continue;

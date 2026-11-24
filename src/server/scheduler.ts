@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { EventEmitter } from 'node:events';
 import { Board, WakeReason } from './board.ts';
 import { boardStore } from './board-store.ts';
+import { boardTools } from './board-tools.ts';
 import { sessionStore } from './session-store.ts';
 import { issueTurnToken, onToolCall, revokeTurnToken } from './mcp-server.ts';
 import { workerServers } from './mcp-connections.ts';
@@ -33,6 +34,7 @@ export type TurnRunner = (peer: Peer, request: TurnRequest) => Promise<TurnResul
 interface RunningTurn {
   record: TurnRecord;
   toolCalls: number;
+  abort: AbortController;
 }
 
 export class Scheduler extends EventEmitter {
@@ -109,7 +111,9 @@ export class Scheduler extends EventEmitter {
     return (this.running.get(sessionId)?.size || 0) > 0;
   }
 
+  /** Drops a deleted session, stopping its turns so they cannot write to its board again. */
   forget(sessionId: string) {
+    for (const turn of this.running.get(sessionId)?.values() || []) turn.abort.abort();
     this.running.delete(sessionId);
     this.history.delete(sessionId);
     this.rotation.delete(sessionId);
@@ -176,7 +180,7 @@ export class Scheduler extends EventEmitter {
         this.startTurn(session, board, peer, reason, cardId);
       }
 
-      board.escalateOrphans(stillIdle);
+      board.escalateOrphans(stillIdle, hinted);
 
       if (this.running.get(sessionId)!.size === 0 && board.data.goal.status === 'running') {
         this.settle(board);
@@ -222,6 +226,10 @@ export class Scheduler extends EventEmitter {
       return;
     }
 
+    // A handed-in card whose merge never ran (the server restarted, say) is merged now.
+    if (boardTools.resumeMerges(board.sessionId) > 0) return;
+    if (open.some(c => boardTools.isMerging(board.sessionId, c.id))) return;
+
     // An offer or a merge may still resolve by itself on a later pass.
     const now = Date.now();
     if (open.some(c => (c.offeredTo && c.offeredTo.until > now) || c.state === 'in_review')) {
@@ -237,7 +245,7 @@ export class Scheduler extends EventEmitter {
   }
 
   private startTurn(session: Session, board: Board, peer: Peer, reason: WakeReason, cardId: string) {
-    if (!board.countTurn(peer.id)) return;
+    board.countTurn(peer.id);
 
     const card = board.data.cards[cardId];
     const record: TurnRecord = {
@@ -250,7 +258,7 @@ export class Scheduler extends EventEmitter {
       cardId,
       startedAt: Date.now()
     };
-    const turn: RunningTurn = { record, toolCalls: 0 };
+    const turn: RunningTurn = { record, toolCalls: 0, abort: new AbortController() };
     this.running.get(session.id)!.set(peer.id, turn);
     this.emit('turn:started', record);
 
@@ -264,6 +272,7 @@ export class Scheduler extends EventEmitter {
       model: peer.model,
       mcp: { url: this.mcpUrl, token },
       timeoutMs: board.data.limits.turnTimeoutMs,
+      signal: turn.abort.signal,
       // Skills and servers are resolved per worker: targets, plugins and ${WORKDIR} differ.
       extraMcpServers: workerServers(session.id, resolveFor(session.customizations, peer.id, cwd).mcpServers)
     };
@@ -279,6 +288,7 @@ export class Scheduler extends EventEmitter {
   }
 
   private finishTurn(session: Session, board: Board, peer: Peer, turn: RunningTurn, result: TurnResult) {
+    if (turn.abort.signal.aborted) return;
     this.running.get(session.id)?.delete(peer.id);
     const record = turn.record;
     record.endedAt = Date.now();
@@ -310,7 +320,8 @@ export class Scheduler extends EventEmitter {
       });
     } else if (!result.ok) {
       board.turnFailed(peer.id, result.error || 'The turn failed');
-      if (turn.toolCalls === 0) {
+      // A timeout says the turn was slow, not that the CLI is broken for every peer using it.
+      if (turn.toolCalls === 0 && !result.timedOut) {
         // A rejected CLI invocation cannot fail a card it never claimed. Without a health
         // gate it is immediately rescheduled until the entire goal budget is exhausted.
         const current = agentHealthEngine.get(peer.harness);

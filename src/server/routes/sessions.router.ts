@@ -60,13 +60,14 @@ export function withCost(session: Session) {
 }
 
 export async function removeSession(session: Session) {
+  // Stop the turns first: they are working inside the worktrees about to be removed.
+  scheduler.forget(session.id);
   try {
     await boardTools.dropAllWorkspaces(session);
   } catch {}
   try {
     await worktreeManager.removeWorktree(session.repoPath, session.worktree.path);
   } catch {}
-  scheduler.forget(session.id);
   boardStore.delete(session.id);
   sessionChat.forget(session.id);
   sessionStore.delete(session.id);

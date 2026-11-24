@@ -302,7 +302,6 @@ All have defaults and are set per session.
 | Bounces per card | 3 | Card moves to `needs_user` |
 | Delegation chain length | 2 | Delegation rejected |
 | Plan edits per goal | 40 | Further edits need the user's approval |
-| Turns per goal | 60 | Goal pauses and asks the user |
 | Time a ready card may wait | 30 minutes with idle peers | Card moves to `needs_user` |
 
 The numbers are starting guesses. They need tuning against real runs.

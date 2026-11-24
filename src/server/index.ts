@@ -30,6 +30,7 @@ import { sessionChat } from './session-chat.ts';
 import { scheduler } from './scheduler.ts';
 import { sessionStore } from './session-store.ts';
 import { startTeamAnnouncements } from './team.ts';
+import { killAllClis } from './process-utils.ts';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1', 'tauri.localhost']);
 
@@ -220,6 +221,8 @@ if (!process.env.VITEST) {
   const shutdown = () => {
     console.log('Shutting down Smith...');
     scheduler.stop();
+    // Agent CLIs lead their own process groups, so they do not get the terminal's signal.
+    killAllClis();
     process.exit(0);
   };
   process.on('SIGINT', shutdown);

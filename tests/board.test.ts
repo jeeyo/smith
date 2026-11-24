@@ -408,18 +408,100 @@ describe('Board', () => {
     expect(board.data.goal.status).toBe('paused');
   });
 
-  it('caps plan edits and turns, pausing for the user', () => {
-    board.setLimits({ maxPlanEdits: 2, maxTurns: 2 });
+  it('caps plan edits, pausing for the user', () => {
+    board.setLimits({ maxPlanEdits: 2 });
     start(board, [task('A')]);
     board.create('a', task('B', { fileScope: ['b'] }), 'r', board.data.planVersion);
     board.create('a', task('C', { fileScope: ['c'] }), 'r', board.data.planVersion);
     expectCode(() => board.create('a', task('D', { fileScope: ['d'] }), 'r', board.data.planVersion), 'limit');
     expect(board.data.goal.status).toBe('paused');
-    board.resume();
-    expect(board.countTurn('a')).toBe(true);
-    expect(board.countTurn('a')).toBe(true);
-    expect(board.countTurn('a')).toBe(false);
-    expect(board.data.goal.status).toBe('paused');
+  });
+
+  it('does not complete the goal while cards added during verification are open', () => {
+    board.setReviewMode('fast');
+    const [a] = start(board, [task('A')]);
+    board.claim('a', a.id);
+    board.submit('a', a.id, { summary: 's' });
+    board.merged(a.id);
+    const verify = board.ensureVerifyCard()!;
+    board.claim('a', verify.id);
+    const extra = board.createByUser(task('Late request'));
+    expect(board.submit('a', verify.id, { summary: 'npm test exit 0', passed: true }).outcome).toBe('done');
+    expect(board.data.goal.status).toBe('running');
+    expect(board.ensureVerifyCard()).toBeNull();
+    board.claim('b', extra.id);
+    board.submit('b', extra.id, { summary: 's' });
+    board.merged(extra.id);
+    expect(board.ensureVerifyCard()).not.toBeNull();
+  });
+
+  it('keeps submitted work and its review consistent', () => {
+    board.setReviewMode('thorough');
+    const [a] = start(board, [task('A')]);
+    board.claim('a', a.id);
+    const { reviewCardId } = board.submit('a', a.id, { summary: 's' }) as { reviewCardId: string };
+    expectCode(() => board.askUser('a', a.id, 'Is this right?'), 'bad_state');
+    expect(board.awaitingMerge()).toEqual([]);
+
+    board.claim('b', reviewCardId);
+    board.card(a.id).state = 'ready';
+    expect(board.reviewVerdict('b', reviewCardId, true, 'looks fine').outcome).toBe('stale');
+    expect(board.card(reviewCardId).state).toBe('cancelled');
+  });
+
+  it('finds handed-in cards nothing will merge, and bounces a merge that fails', () => {
+    board.setReviewMode('fast');
+    const [a] = start(board, [task('A')]);
+    board.claim('a', a.id);
+    board.submit('a', a.id, { summary: 's' });
+    expect(board.awaitingMerge().map(c => c.id)).toEqual([a.id]);
+    board.mergeFailed(a.id, 'index.lock exists');
+    expect(board.card(a.id).state).toBe('ready');
+    expect(board.card(a.id).bounces).toBe(1);
+    expect(board.card(a.id).failedBy).toEqual(['a']);
+  });
+
+  it('counts failed workspace setup and repeated failed resolutions as bounces', () => {
+    const [a] = start(board, [task('A')]);
+    for (let i = 0; i < 3; i++) {
+      board.claim(i % 2 ? 'b' : 'a', a.id);
+      board.unclaim(a.id, 'worktree path is taken');
+    }
+    expect(board.card(a.id).state).toBe('needs_user');
+
+    board.answerUser(a.id, 'fixed');
+    board.claim('a', a.id);
+    board.submit('a', a.id, { summary: 's' });
+    let conflict = board.mergeConflicted(a.id, []);
+    for (let i = 0; i < 3; i++) {
+      board.claim(i % 2 ? 'a' : 'b', conflict.id);
+      board.submit(i % 2 ? 'a' : 'b', conflict.id, { summary: 'resolved' });
+      conflict = board.mergeConflicted(conflict.id, [], 'refusing to merge');
+    }
+    expect(conflict.state).toBe('needs_user');
+    expect(conflict.description).toContain('refusing to merge');
+  });
+
+  it('releases a tier-escalated card when the user lowers its tier', () => {
+    const [a] = start(board, [task('A', { minTier: 3 })]);
+    board.escalateOrphans([]);
+    expect(board.card(a.id).state).toBe('needs_user');
+    board.userEdit(a.id, { minTier: 2 });
+    expect(board.card(a.id).state).toBe('ready');
+  });
+
+  it('does not escalate a waiting card that a peer is being woken for', () => {
+    const [a] = start(board, [task('A')]);
+    clock += board.data.limits.readyWaitMs + 1;
+    expect(board.escalateOrphans(['b'], new Set([a.id]))).toEqual([]);
+    expect(board.escalateOrphans(['b'])).toEqual([a.id]);
+  });
+
+  it('never pauses on turn count', () => {
+    start(board, [task('A')]);
+    for (let i = 0; i < 500; i++) board.countTurn('a');
+    expect(board.data.counters.turns).toBe(500);
+    expect(board.data.goal.status).toBe('running');
   });
 
   it('records every accepted change with who and why', () => {

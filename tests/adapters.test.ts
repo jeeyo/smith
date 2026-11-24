@@ -53,6 +53,14 @@ describe('usage-limit detection', () => {
     expect(detectUsageLimit('Tests failed: 3 of 10', now)).toBeUndefined();
   });
 
+  it('ignores limit and login words in the work earlier in the transcript', () => {
+    const work = ['Editing src/rate-limit.ts: return 429 when the rate limit is exceeded, retry in 5 minutes', 'Added 401 Unauthorized handling'];
+    const transcript = [...work, ...Array.from({ length: 20 }, (_, i) => `step ${i}`), 'Error: tests failed'].join('\n');
+    expect(detectUsageLimit(transcript, now)).toBeUndefined();
+    expect(detectNotLoggedIn(transcript)).toBe(false);
+    expect(detectUsageLimit(`${transcript}\nUsage limit reached.\nTry again in 30 minutes.`, now)!.resetAt).toBe(now + 30 * 60_000);
+  });
+
   it('recognises a logged-out CLI', () => {
     expect(detectNotLoggedIn('Not logged in · Please run /login')).toBe(true);
     expect(detectNotLoggedIn('OAuth token has expired')).toBe(true);

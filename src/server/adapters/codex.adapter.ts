@@ -45,7 +45,8 @@ export class CodexAdapter implements AgentAdapter {
     const res = await runCli(this.getBinaryPath(), args, {
       cwd: request.cwd,
       timeoutMs: request.timeoutMs,
-      env
+      env,
+      signal: request.signal
     });
     return plainResult('Codex', res);
   }
