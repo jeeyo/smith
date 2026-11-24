@@ -101,7 +101,6 @@ export interface BoardLimits {
   maxBounces: number;
   maxDelegationChain: number;
   maxPlanEdits: number;
-  maxTurns: number;
   readyWaitMs: number;
   offerMs: number;
   reviewLines: number;
@@ -115,7 +114,6 @@ export const DEFAULT_LIMITS: BoardLimits = {
   maxBounces: 3,
   maxDelegationChain: 2,
   maxPlanEdits: 40,
-  maxTurns: 60,
   readyWaitMs: 30 * 60_000,
   offerMs: 10 * 60_000,
   reviewLines: 150,

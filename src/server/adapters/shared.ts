@@ -63,15 +63,29 @@ export async function versionProbe(harness: HarnessId, name: string, bin: string
 const LIMIT_PATTERNS = [/usage limit/i, /rate limit/i, /limit reached/i, /hit your (usage )?limit/i, /quota exceeded/i, /out of (usage|credits)/i];
 const LOGIN_PATTERNS = [/not logged in/i, /please run .*login/i, /failed to authenticate/i, /oauth (token|session).*(expired|invalid)/i, /invalid api key/i, /unauthorized/i];
 
+/** Lines of CLI output searched for limit and login messages. */
+const TAIL_LINES = 12;
+
+/**
+ * The last lines of a failed turn's output. The CLI reports why it stopped at the end; earlier
+ * lines are the agent's own work, which may well mention rate limits or authorization.
+ */
+function tail(output: string): string[] {
+  return output.split('\n').map(l => l.trim()).filter(Boolean).slice(-TAIL_LINES);
+}
+
 /**
  * Recognises a usage-limit message in CLI output and, when it can, when the limit resets.
  * This is text matching: it breaks if a CLI rewords its message, in which case the turn is
  * reported as an ordinary failure.
  */
-export function detectUsageLimit(output: string, now: number = Date.now()): { message: string; resetAt?: number } | undefined {
-  if (!LIMIT_PATTERNS.some(p => p.test(output))) return undefined;
-  const line = output.split('\n').find(l => LIMIT_PATTERNS.some(p => p.test(l))) || output;
-  const message = line.trim().slice(0, 300);
+export function detectUsageLimit(fullOutput: string, now: number = Date.now()): { message: string; resetAt?: number } | undefined {
+  const lines = tail(fullOutput);
+  const at = lines.findIndex(l => LIMIT_PATTERNS.some(p => p.test(l)));
+  if (at < 0) return undefined;
+  const message = lines[at].slice(0, 300);
+  // The reset time is on the limit line or just after it.
+  const output = lines.slice(at, at + 3).join('\n');
 
   // "…|1763049600": an epoch in seconds.
   const epoch = output.match(/\|(\d{10})\b/);
@@ -99,5 +113,5 @@ export function detectUsageLimit(output: string, now: number = Date.now()): { me
 }
 
 export function detectNotLoggedIn(output: string): boolean {
-  return LOGIN_PATTERNS.some(p => p.test(output));
+  return tail(output).some(line => LOGIN_PATTERNS.some(p => p.test(line)));
 }

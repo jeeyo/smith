@@ -48,7 +48,8 @@ export class CursorAdapter implements AgentAdapter {
       const res = await runCli(this.getBinaryPath(), args, {
         cwd: request.cwd,
         timeoutMs: request.timeoutMs,
-        env
+        env,
+        signal: request.signal
       });
       return parseResult(res);
     } finally {

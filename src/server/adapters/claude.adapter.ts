@@ -4,7 +4,7 @@ import path from 'node:path';
 import { AgentAdapter, TurnRequest, TurnResult } from './types.ts';
 import { AgentHealthStatus } from '../../shared/types.ts';
 import { HarnessId } from '../../shared/board.ts';
-import { spawnCli } from '../process-utils.ts';
+import { killTree, spawnCli } from '../process-utils.ts';
 import { binaryInstalled, configuredBinary, detectNotLoggedIn, detectUsageLimit, versionProbe } from './shared.ts';
 
 export class ClaudeAdapter implements AgentAdapter {
@@ -61,15 +61,22 @@ export class ClaudeAdapter implements AgentAdapter {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
+        request.signal?.removeEventListener('abort', onAbort);
         try { fs.rmSync(configFile, { force: true }); } catch {}
         resolve(result);
+      };
+      const onAbort = () => {
+        killTree(proc);
+        finish({ ok: false, text: stdout, error: 'The turn was cancelled' });
       };
 
       const proc = spawnCli(this.getBinaryPath(), args, { cwd: request.cwd, stdio: ['pipe', 'pipe', 'pipe'] });
       const timer = setTimeout(() => {
-        try { proc.kill(); } catch {}
+        killTree(proc);
         finish({ ok: false, text: stdout, timedOut: true, error: `Claude Code turn timed out after ${Math.round(request.timeoutMs / 1000)}s` });
       }, request.timeoutMs);
+      if (request.signal?.aborted) onAbort();
+      else request.signal?.addEventListener('abort', onAbort, { once: true });
 
       proc.stdout?.on('data', d => { stdout += d.toString(); });
       proc.stderr?.on('data', d => { stderr += d.toString(); });

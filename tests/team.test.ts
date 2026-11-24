@@ -178,7 +178,7 @@ describe('A leaderless team working a goal', () => {
     expect(fs.existsSync(path.join(session.worktree.path, 'src/types.ts'))).toBe(true);
     expect(fs.existsSync(path.join(session.worktree.path, 'src/service.ts'))).toBe(true);
     expect(git(session.worktree.path, 'status', '--porcelain').trim()).toBe('');
-    expect(git(repo, 'worktree', 'list').trim().split('\n').length).toBe(2);
+    expect(git(repo, 'worktree', 'list').trim().split('\n').filter(l => !l.includes('--lobby-')).length).toBe(2);
     // The user's own checkout was never touched.
     expect(fs.existsSync(path.join(repo, 'src'))).toBe(false);
 
@@ -459,6 +459,38 @@ describe('A leaderless team working a goal', () => {
     expect(attempts[0]).not.toBe(attempts[1]);
     expect(sessionChat.history(session.id).some(m => m.kind === 'question')).toBe(true);
     expect(attempts.length).toBe(3);
+  });
+
+  it('takes back a card its holder keeps without changing, and keeps pre-claim writes off the session branch', async () => {
+    const repo = makeRepo({ tasks: [{ title: 'Stuck', description: 'x', acceptance: ['x'], fileScope: ['x.txt'] }] });
+    const session = await createSession(repo, [{ agentId: 'claude', model: 'opus' }], { reviewMode: 'fast' });
+    const board = boardStore.get(session.id);
+    const claimCwds: string[] = [];
+
+    runWith(async (_peer, req, t) => {
+      const read = await t('board_read');
+      // Holding the card, the peer reads the board and changes nothing.
+      if (read.yourCards[0] || !read.claimable[0]) return;
+      claimCwds.push(req.cwd);
+      fs.writeFileSync(path.join(req.cwd, 'stray.txt'), 'written before claiming');
+      await t('card_claim', { cardId: read.claimable[0] });
+    });
+
+    await request(app).post(`/api/v1/sessions/${session.id}/goal`).send({ goal: 'docs/spec.md' });
+    await until(() => board.cards()[0].state === 'needs_user', 'escalated to the user');
+
+    const card = board.cards()[0];
+    expect(card.bounces).toBe(3);
+    expect(card.thread.some(n => n.text.includes('without changing any of its files'))).toBe(true);
+    expect(claimCwds.length).toBe(3);
+    for (const cwd of claimCwds) {
+      expect(cwd).toContain('--lobby-claude-1');
+      expect(cwd).not.toBe(session.worktree.path);
+    }
+    expect(fs.existsSync(path.join(session.worktree.path, 'stray.txt'))).toBe(false);
+
+    await request(app).delete(`/api/v1/sessions/${session.id}`);
+    expect(fs.existsSync(claimCwds[0])).toBe(false);
   });
 
   it('adds a later user message to a running goal as a card', async () => {

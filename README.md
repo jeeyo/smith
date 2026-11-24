@@ -32,7 +32,7 @@ Smith is a desktop app in which a team of coding agents works on your goal toget
 - **Usage limits handled.** A CLI and model that hits its subscription limit leaves the team, its cards return to the board, and it rejoins after the reset.
 - **Session setup in plain language.** Ask Smith to create a session in a folder and branch with the exact worker mix you want. The create dialog also includes a folder browser and Git branch dropdown.
 - **Skills and external tools.** Import complete third-party skill packages and connect stdio or Streamable HTTP MCP servers, including OAuth. Choose which workers receive them.
-- **Smith as MCP.** The unauthenticated, stateless Streamable HTTP endpoint at `http://127.0.0.1:4100/mcp` exposes Smith management tools to workers and external clients.
+- **Smith as MCP.** The unauthenticated, stateless Streamable HTTP endpoint at `http://127.0.0.1:4100/mcp` exposes Smith management tools to external clients, and their read-only subset to workers.
 - **Markdown throughout.** Chat messages and card details render headings, lists, tables, fenced code and Mermaid diagrams.
 - **Tauri 2 desktop app** for macOS, with a local server on port 4100 and API docs at `/api/docs`.
 
