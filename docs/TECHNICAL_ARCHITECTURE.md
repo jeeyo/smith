@@ -93,6 +93,7 @@ Each adapter has `probeHealth` (a `--version` call, which spends no usage) and `
 | Claude Code | `claude -p --output-format json --mcp-config <file>`, prompt on stdin | Flags verified against the installed CLI; a full live run has not been done |
 | Codex | `codex exec` with `-c mcp_servers.board.*` overrides, token in an environment variable | Not verified |
 | OpenCode | `opencode run` with inline config in `OPENCODE_CONFIG_CONTENT` | Not verified |
+| Cursor CLI | `cursor-agent -p --output-format stream-json --force --trust --approve-mcps --plugin-dir <dir>`; the per-turn plugin's `.mcp.json` holds `${env:NAME}` references, with secrets in the environment | Verified live with CLI 2026.11.22: board tool calls over the per-turn plugin, and Ask Smith |
 
 All CLIs are spawned with real argument arrays and no shell (`process-utils.ts`). `adapters/shared.ts` recognises usage-limit and not-logged-in messages by matching text and extracts a reset time when it can.
 
@@ -104,7 +105,7 @@ All CLIs are spawned with real argument arrays and no shell (`process-utils.ts`)
 
 The catalog holds the built-in entries plus any added through the API (saved in `catalog.json`). A session stores which skills, servers and plugins are on, input values for servers, and optional per-worker targets keyed `skill:<id>`, `mcp:<id>` or `plugin:<id>`.
 
-`resolveFor(customizations, peerId, workdir)` works out what one worker gets on one turn: the session's own skills and servers plus those its plugins bring, limited to the ones targeting that worker, with `${WORKDIR}` and `${KEY}` placeholders filled in. A server still missing an input is left out; the API refuses to save such a state in the first place. The scheduler calls it for every turn, and each adapter attaches the resulting servers in its CLI's own way (an MCP config file, Codex `-c` overrides, OpenCode inline config). Secret input values are masked in every API response, and a mask sent back unchanged keeps the stored value.
+`resolveFor(customizations, peerId, workdir)` works out what one worker gets on one turn: the session's own skills and servers plus those its plugins bring, limited to the ones targeting that worker, with `${WORKDIR}` and `${KEY}` placeholders filled in. A server still missing an input is left out; the API refuses to save such a state in the first place. The scheduler calls it for every turn, and each adapter attaches the resulting servers in its CLI's own way (an MCP config file, Codex `-c` overrides, OpenCode inline config, a Cursor CLI plugin directory). Secret input values are masked in every API response, and a mask sent back unchanged keeps the stored value.
 
 ## 7. Git (`worktree-manager.ts`)
 

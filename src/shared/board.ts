@@ -4,7 +4,7 @@
  */
 
 export type PeerId = string;
-export type HarnessId = 'claude' | 'codex' | 'opencode';
+export type HarnessId = 'claude' | 'codex' | 'opencode' | 'cursor';
 export type Tier = 1 | 2 | 3;
 
 export type CardKind = 'plan' | 'work' | 'review' | 'verify' | 'merge-conflict';

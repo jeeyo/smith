@@ -1,11 +1,11 @@
 # Smith user manual
 
-Smith runs a team of coding agents on a goal you state. The agents are the CLIs you already have (Claude Code, Codex, OpenCode), using the logins those CLIs already hold. Nobody leads the team. The agents coordinate through one shared board that you can watch and steer.
+Smith runs a team of coding agents on a goal you state. The agents are the CLIs you already have (Claude Code, Codex, OpenCode, Cursor CLI), using the logins those CLIs already hold. Nobody leads the team. The agents coordinate through one shared board that you can watch and steer.
 
 ## 1. Before you start
 
 - Node.js 22 or later, and Git.
-- At least one agent CLI installed and logged in. Smith finds `claude`, `codex` and `opencode` on your `PATH`; you can set exact paths in **App settings → Agent Binaries**.
+- At least one agent CLI installed and logged in. Smith finds `claude`, `codex`, `opencode` and `cursor-agent` on your `PATH`; you can set exact paths in **App settings → Agent Binaries**.
 - A local Git repository to work in.
 
 Start the app from source with `npm run tauri:dev`, or run `npm run server` and `npm run dev` in separate terminals. The development UI with live reload is at `http://localhost:5173` and the API reference at `http://localhost:4100/api/docs`. After `npm run build`, the server also serves the built UI at `http://localhost:4100`.
@@ -170,11 +170,11 @@ Deleting a session removes its worktrees and its board. The session branch stays
 
 ![Settings: paths to the agent CLIs](images/settings.png)
 
-- **Agent Binaries:** paths to `claude`, `codex` and `opencode`, with a check that each exists.
+- **Agent Binaries:** paths to `claude`, `codex`, `opencode` and `cursor-agent`, with a check that each exists.
 - **App & Workspace:** Git path, default repository path, server port, display currency.
 - **Skills and tools** (sliders icon, per session). Changes apply from each worker's next turn.
   - **Skills** are conventions added to the worker's instructions.
-  - **MCP servers** support local commands (stdio) and remote Streamable HTTP endpoints, for Claude Code, Codex and OpenCode workers alike. Use **Add third-party MCP server**, enter the command and JSON arguments/environment or endpoint and optional JSON headers, then enable it and Apply. Remote connections run through Smith’s credential broker. A server that needs a value, such as the PostgreSQL connection string or a GitHub token, asks for it and cannot be switched on without it. Secret values are stored with the session on this machine and shown masked. The filesystem server is limited to the directory the worker's turn runs in.
+  - **MCP servers** support local commands (stdio) and remote Streamable HTTP endpoints, for Claude Code, Codex, OpenCode and Cursor CLI workers alike. Use **Add third-party MCP server**, enter the command and JSON arguments/environment or endpoint and optional JSON headers, then enable it and Apply. Remote connections run through Smith’s credential broker. A server that needs a value, such as the PostgreSQL connection string or a GitHub token, asks for it and cannot be switched on without it. Secret values are stored with the session on this machine and shown masked. The filesystem server is limited to the directory the worker's turn runs in.
   - **Plugins** switch on a set of skills and servers together; the servers they bring are marked "On through" the plugin.
   - Each skill, server or plugin applies to all workers, or to the ones you pick under it.
   - **Install a third-party skill** accepts a local skill directory, a `SKILL.md` path, a direct Markdown URL, or a GitHub/GitLab repository/subfolder URL. It immediately enables the skill in this session. Full packages include `scripts/`, `references/` and `assets/`; importing does not execute scripts. Imports are limited to 10 MiB/1,000 files and reject symlinks. A repository URL must point to a directory containing `SKILL.md`.
@@ -185,12 +185,13 @@ Settings are stored in `~/.smith/config.json`. Sessions, boards, chats and specs
 
 ## 11. Cost figures
 
-Claude Code reports real token usage for each turn, and Smith prices it from its pricing table. Codex and OpenCode turns report no usage, so they add nothing to the totals. The figure is an estimate of what the tokens would cost at list prices, not a charge.
+Claude Code reports real token usage for each turn, and Smith prices it from its pricing table. Codex, OpenCode and Cursor CLI turns report no usage, so they add nothing to the totals. The figure is an estimate of what the tokens would cost at list prices, not a charge.
 
 ## 12. Known limits
 
 - OpenCode 2 turns use a private server so each worker receives its own board connection and credentials. OpenCode 1 uses its original one-shot run mode.
-- Codex turns use managed approval within its workspace sandbox and honor local policy. Claude Code and OpenCode can run commands and change files anywhere your user account can. Use repositories and machines where that is acceptable.
+- Codex turns use managed approval within its workspace sandbox and honor local policy. Claude Code, OpenCode and Cursor CLI can run commands and change files anywhere your user account can (Cursor CLI turns run with `--force`; its own sandbox setting still applies).
+- Cursor CLI turns attach the board through a temporary local plugin (`--plugin-dir`). Log in first with `cursor-agent login`. Use repositories and machines where that is acceptable.
 - The in-app terminal is a plain shell without a TTY. Logins that need one are better done in your own terminal.
 - File scopes are checked when a card is submitted, not while the worker is editing.
 

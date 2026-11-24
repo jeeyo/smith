@@ -31,7 +31,7 @@ class SessionStore {
     const agents: Session['agents'] = {};
     for (const [key, value] of Object.entries<any>(data.agents || {})) {
       const harness = value?.config?.agentId;
-      if (!['claude', 'codex', 'opencode'].includes(harness)) continue;
+      if (!['claude', 'codex', 'opencode', 'cursor'].includes(harness)) continue;
       agents[key] = {
         config: { workerId: key, agentId: harness, model: value.config.model, tier: value.config.tier || 2 }
       };

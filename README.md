@@ -10,7 +10,7 @@
 
 </p>
 
-Smith is a desktop app in which a team of coding agents works on your goal together. The agents are the CLIs you already use (**Claude Code**, **Codex**, **OpenCode**), running on your existing logins. Nobody leads the team: the agents plan on one shared board, claim cards, hand work to each other, and change the plan when something does not go as expected.
+Smith is a desktop app in which a team of coding agents works on your goal together. The agents are the CLIs you already use (**Claude Code**, **Codex**, **OpenCode**, **Cursor CLI**), running on your existing logins. Nobody leads the team: the agents plan on one shared board, claim cards, hand work to each other, and change the plan when something does not go as expected.
 
 ![The chat beside the shared board, with work in progress and a question for the user](docs/images/board.png)
 
@@ -59,7 +59,7 @@ This installs `Smith.app` into `/Applications`, links a `smith` command that lau
 #### Prerequisites
 - [Node.js](https://nodejs.org/) v22+
 - Git
-- At least one agent CLI, installed and logged in: [Claude Code](https://claude.com/claude-code), Codex or OpenCode
+- At least one agent CLI, installed and logged in: [Claude Code](https://claude.com/claude-code), Codex, OpenCode or [Cursor CLI](https://cursor.com/cli)
 
 #### Installation
 
@@ -126,9 +126,11 @@ flowchart LR
     Scheduler -->|one-shot turn| Claude["Claude Code"]
     Scheduler -->|one-shot turn| Codex["Codex"]
     Scheduler -->|one-shot turn| OpenCode["OpenCode"]
+    Scheduler -->|one-shot turn| Cursor["Cursor CLI"]
     Claude -->|MCP tools| Board
     Codex -->|MCP tools| Board
     OpenCode -->|MCP tools| Board
+    Cursor -->|MCP tools| Board
 ```
 
 For more detail, see:

@@ -19,7 +19,8 @@ export class ModelDiscoveryEngine {
     await Promise.allSettled([
       this.discoverCodexModels(),
       this.discoverClaudeModels(),
-      this.discoverOpenCodeModels()
+      this.discoverOpenCodeModels(),
+      this.discoverCursorModels()
     ]);
 
     this.lastRefreshedAt = Date.now();
@@ -143,6 +144,31 @@ export class ModelDiscoveryEngine {
         provider: id.split('/')[0],
         source: 'cli-probe'
       });
+    }
+  }
+
+  private async discoverCursorModels() {
+    const adapter = getAgentAdapter('cursor');
+    if (!adapter.isInstalled()) return;
+
+    // `cursor-agent models` prints "<id> - <name>", tagged "(current, default)" where it applies.
+    const res = await runCli(adapter.getBinaryPath(), ['models'], { timeoutMs: 15000 });
+    if (res.code === 0) {
+      for (const line of res.stdout.split('\n')) {
+        const m = line.trim().match(/^([\w.:@/\[\]=,-]+) - (.+?)(?: \(([^)]*)\))?$/);
+        if (!m) continue;
+        this.discoveredModels.set(`cursor:${m[1]}`, {
+          id: m[1],
+          name: m[2],
+          agentId: 'cursor',
+          provider: 'Cursor',
+          source: 'cli-probe',
+          isDefault: /\bdefault\b/.test(m[3] || '')
+        });
+      }
+    }
+    if (!this.discoveredModels.has('cursor:auto')) {
+      this.discoveredModels.set('cursor:auto', { id: 'auto', name: 'Auto', agentId: 'cursor', provider: 'Cursor', source: 'cli-probe', isDefault: res.code !== 0 });
     }
   }
 

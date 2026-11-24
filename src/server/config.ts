@@ -50,6 +50,8 @@ function detectDefaultBinaries(): Record<string, string> {
     const found = findOnPath(name);
     if (found) detected[name] = found;
   }
+  const cursor = findOnPath('cursor-agent');
+  if (cursor) detected.cursor = cursor;
   return detected;
 }
 
@@ -63,7 +65,7 @@ if (fs.existsSync(configFile)) {
   } catch {}
 }
 
-const HARNESS_KEYS = ['claude', 'codex', 'opencode'];
+const HARNESS_KEYS = ['claude', 'codex', 'opencode', 'cursor'];
 
 function pickBinaries(source: any): Record<string, string> {
   const out: Record<string, string> = {};
@@ -85,6 +87,7 @@ export const config: AppConfig = {
     claude: detected.claude || 'claude',
     codex: detected.codex || 'codex',
     opencode: detected.opencode || 'opencode',
+    cursor: detected.cursor || 'cursor-agent',
     ...pickBinaries(persistedConfig.agentBinaries)
   },
   detectedBinaries: detected,
