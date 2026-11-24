@@ -1,5 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { config } from './config.ts';
@@ -422,6 +423,61 @@ export class WorktreeManager {
       await this.runGit(['merge', '--no-verify', sessionBranch, '-m', `Merge ${sessionBranch} to resolve conflicts`], cardWorktree);
     } catch {
       // Expected: the conflict is now in the working tree.
+    }
+  }
+
+  /**
+   * A value that changes whenever the files in a worktree change: its commit, its uncommitted
+   * diff, and the size and modification time of each untracked file.
+   */
+  async fingerprint(worktreePath: string): Promise<string | undefined> {
+    if (!(await this.isWorktreeRoot(worktreePath))) return undefined;
+    const [{ stdout: head }, { stdout: diff }, { stdout: untracked }] = await Promise.all([
+      this.runGit(['rev-parse', 'HEAD'], worktreePath),
+      this.runGit(['diff', 'HEAD', '--binary'], worktreePath),
+      this.runGit(['ls-files', '--others', '--exclude-standard', '-z'], worktreePath)
+    ]);
+    const hash = crypto.createHash('sha256').update(head).update('\0').update(diff);
+    for (const file of untracked.split('\0').filter(Boolean)) {
+      try {
+        const stat = fs.statSync(path.join(worktreePath, file));
+        hash.update(`\0${file}\0${stat.size}\0${stat.mtimeMs}`);
+      } catch {
+        hash.update(`\0${file}`);
+      }
+    }
+    return hash.digest('hex');
+  }
+
+  private lobbyDir(repoPath: string, sessionBranch: string, peerId: string): string {
+    return this.cardWorktreeDir(repoPath, `${sessionBranch}--lobby-${peerId}`);
+  }
+
+  /**
+   * A scratch checkout of the session branch for a peer's turns before it claims a card. It is
+   * reset at the start of every such turn, so nothing written there reaches the session branch.
+   */
+  async prepareLobby(repoPath: string, sessionBranch: string, peerId: string): Promise<string> {
+    assertSafeRef(sessionBranch, 'session branch');
+    const dir = this.lobbyDir(repoPath, sessionBranch, peerId);
+    if (await this.isWorktreeRoot(dir)) {
+      await this.runGit(['checkout', '--force', '--detach', sessionBranch], dir);
+      await this.runGit(['clean', '-fd'], dir);
+      return dir;
+    }
+    fs.mkdirSync(path.dirname(dir), { recursive: true });
+    await this.runGit(['worktree', 'prune'], repoPath);
+    await this.runGit(['worktree', 'add', '--force', '--detach', dir, sessionBranch], repoPath);
+    return dir;
+  }
+
+  /** Removes the scratch checkouts of every peer a session ever had. */
+  async removeLobbies(repoPath: string, sessionBranch: string): Promise<void> {
+    const prefix = path.basename(this.lobbyDir(repoPath, sessionBranch, ''));
+    const root = path.join(repoPath, '.worktrees');
+    if (!fs.existsSync(root)) return;
+    for (const name of fs.readdirSync(root)) {
+      if (name.startsWith(prefix)) await this.removeWorktree(repoPath, path.join(root, name));
     }
   }
 

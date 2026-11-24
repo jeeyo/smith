@@ -17,15 +17,53 @@ use std::os::windows::process::CommandExt;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-const PORT: u16 = 4100;
+const DEFAULT_PORT: u16 = 4100;
+/// How long the server gets to stop its agent CLIs on exit before it is killed.
+const SHUTDOWN_GRACE: Duration = Duration::from_secs(3);
 
 fn get_smith_dir() -> Option<PathBuf> {
+    if let Ok(dir) = std::env::var("SMITH_STORAGE_DIR") {
+        if !dir.is_empty() {
+            return Some(PathBuf::from(dir));
+        }
+    }
     let home = std::env::var("USERPROFILE")
         .or_else(|_| std::env::var("HOME"))
         .ok()?;
     let dir = PathBuf::from(home).join(".smith");
     let _ = fs::create_dir_all(&dir);
     Some(dir)
+}
+
+/// The server's port: PORT if set, else the port saved in App Settings, else 4100.
+fn configured_port() -> u16 {
+    if let Some(port) = std::env::var("PORT").ok().and_then(|p| p.parse::<u16>().ok()).filter(|p| *p > 0) {
+        return port;
+    }
+    get_smith_dir()
+        .and_then(|dir| fs::read_to_string(dir.join("config.json")).ok())
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        .and_then(|config| config.get("app")?.get("port")?.as_u64())
+        .and_then(|port| u16::try_from(port).ok())
+        .filter(|port| *port > 0)
+        .unwrap_or(DEFAULT_PORT)
+}
+
+/// Asks the server to stop (it stops its agent CLIs on SIGTERM), and kills it if it does not.
+fn stop_backend(child: &mut Child) {
+    #[cfg(unix)]
+    {
+        let _ = Command::new("kill").arg("-TERM").arg(child.id().to_string()).status();
+        let deadline = std::time::Instant::now() + SHUTDOWN_GRACE;
+        while std::time::Instant::now() < deadline {
+            if let Ok(Some(_)) = child.try_wait() {
+                return;
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+    }
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 fn log_msg(msg: &str) {
@@ -154,9 +192,9 @@ fn find_node_executable() -> PathBuf {
     PathBuf::from("node")
 }
 
-fn spawn_backend_server() -> Option<Child> {
-    if check_server_health(PORT) {
-        log_msg(&format!("Backend server already running and healthy on port {}", PORT));
+fn spawn_backend_server(port: u16) -> Option<Child> {
+    if check_server_health(port) {
+        log_msg(&format!("Backend server already running and healthy on port {}", port));
         return None;
     }
 
@@ -174,7 +212,7 @@ fn spawn_backend_server() -> Option<Child> {
 
     let mut cmd = Command::new(node_exe);
     cmd.arg(&script);
-    cmd.env("PORT", PORT.to_string());
+    cmd.env("PORT", port.to_string());
 
     if let Some(dp) = dist_path {
         log_msg(&format!("Setting DIST_PATH to {:?}", dp));
@@ -248,8 +286,8 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .setup(move |app| {
-            // Spawn backend server
-            let child = spawn_backend_server();
+            let port = configured_port();
+            let child = spawn_backend_server(port);
             if let Ok(mut lock) = child_for_setup.lock() {
                 *lock = child;
             }
@@ -257,33 +295,44 @@ fn main() {
             // Supervise backend health and navigate window
             let app_handle = app.handle().clone();
             thread::spawn(move || {
+                let window = app_handle.get_webview_window("main")
+                    .or_else(|| app_handle.webview_windows().values().next().cloned());
+                let Some(w) = window else {
+                    log_msg("Warning: Could not find webview window to navigate/show");
+                    return;
+                };
+                let target_url = format!("http://127.0.0.1:{}", port);
+                let navigate = || {
+                    log_msg(&format!("Navigating webview to {}", target_url));
+                    if let Ok(url) = tauri::Url::parse(&target_url) {
+                        let _ = w.navigate(url);
+                    }
+                };
+
                 let mut ready = false;
                 for i in 0..120 {
-                    if check_server_health(PORT) {
+                    if check_server_health(port) {
                         ready = true;
                         log_msg(&format!("Backend confirmed healthy after {} checks!", i + 1));
                         break;
                     }
                     thread::sleep(Duration::from_millis(250));
                 }
-
-                let target_url = format!("http://127.0.0.1:{}", PORT);
-                let window = app_handle.get_webview_window("main")
-                    .or_else(|| app_handle.webview_windows().values().next().cloned());
-
-                if let Some(w) = window {
-                    if ready {
-                        log_msg(&format!("Navigating webview to {}", target_url));
-                        if let Ok(url) = tauri::Url::parse(&target_url) {
-                            let _ = w.navigate(url);
-                        }
-                    } else {
-                        log_msg("Backend health check timed out; showing window on current content");
-                    }
-                    let _ = w.show();
-                    let _ = w.set_focus();
+                if ready {
+                    navigate();
                 } else {
-                    log_msg("Warning: Could not find webview window to navigate/show");
+                    log_msg("Backend health check timed out; showing window and still waiting");
+                }
+                let _ = w.show();
+                let _ = w.set_focus();
+
+                // A slow first start (antivirus, cold disk) still ends on the app once the server answers.
+                while !ready {
+                    thread::sleep(Duration::from_secs(1));
+                    if check_server_health(port) {
+                        ready = true;
+                        navigate();
+                    }
                 }
             });
 
@@ -297,7 +346,7 @@ fn main() {
                     log_msg("Application exit requested, terminating backend server...");
                     if let Ok(mut lock) = child_for_exit.lock() {
                         if let Some(mut child) = lock.take() {
-                            let _ = child.kill();
+                            stop_backend(&mut child);
                             log_msg("Backend server child process terminated.");
                         }
                     }

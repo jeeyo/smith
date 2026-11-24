@@ -497,6 +497,16 @@ describe('Board', () => {
     expect(board.escalateOrphans(['b'])).toEqual([a.id]);
   });
 
+  it('bounces a stalled card only while its holder still has it', () => {
+    const [a] = start(board, [task('A')]);
+    board.claim('a', a.id);
+    board.stalled('b', a.id, 3);
+    expect(board.card(a.id).state).toBe('claimed');
+    board.stalled('a', a.id, 3);
+    expect(board.card(a.id).state).toBe('ready');
+    expect(board.card(a.id).failedBy).toEqual(['a']);
+  });
+
   it('never pauses on turn count', () => {
     start(board, [task('A')]);
     for (let i = 0; i < 500; i++) board.countTurn('a');
