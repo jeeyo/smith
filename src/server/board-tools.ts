@@ -492,6 +492,11 @@ export class BoardTools {
   async dropAllWorkspaces(session: Session) {
     if (!boardStore.has(session.id)) return;
     const board = boardStore.get(session.id);
+    try {
+      await worktreeManager.removeLobbies(session.repoPath, session.worktree.branch);
+    } catch (err) {
+      console.warn(`Could not remove the scratch worktrees of ${session.id}:`, err);
+    }
     const seen = new Set<string>();
     for (const card of board.cards()) {
       if (card.worktreePath && card.branch && !seen.has(card.worktreePath)) {

@@ -111,6 +111,8 @@ The server does not decide who does what. It enforces rules:
 - A card cannot be handed back to someone who already passed it on, and can be handed on at most twice.
 - A worker that fails a card does not get the next attempt while another worker is free.
 - A lease expires after 20 minutes without a turn, and the card returns to the board.
+- A worker that keeps a card for 3 turns in a row without changing any of its files loses it; the card returns to the board.
+- Until a worker claims a card, it works in its own scratch copy of the session branch, which is reset before each such turn. Nothing written there reaches the session branch.
 
 When a card is done its branch is merged into the session branch. If the merge conflicts, it is aborted and a merge-conflict card is opened for a worker to resolve.
 
@@ -171,7 +173,7 @@ Deleting a session removes its worktrees and its board. The session branch stays
 ![Settings: paths to the agent CLIs](images/settings.png)
 
 - **Agent Binaries:** paths to `claude`, `codex` and `opencode`, with a check that each exists.
-- **App & Workspace:** Git path, default repository path, server port, display currency.
+- **App & Workspace:** Git path, default repository path, server port, display currency. A new server port takes effect when the app restarts; the desktop app reads it at launch (the `PORT` environment variable overrides it).
 - **Skills and tools** (sliders icon, per session). Changes apply from each worker's next turn.
   - **Skills** are conventions added to the worker's instructions.
   - **MCP servers** support local commands (stdio) and remote Streamable HTTP endpoints, for Claude Code, Codex and OpenCode workers alike. Use **Add third-party MCP server**, enter the command and JSON arguments/environment or endpoint and optional JSON headers, then enable it and Apply. Remote connections run through Smith’s credential broker. A server that needs a value, such as the PostgreSQL connection string or a GitHub token, asks for it and cannot be switched on without it. Secret values are stored with the session on this machine and shown masked. The filesystem server is limited to the directory the worker's turn runs in.

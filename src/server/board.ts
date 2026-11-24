@@ -1161,6 +1161,14 @@ export class Board {
     if (changed) this.record('board', 'turn_failed', { detail: `${peerId}: ${message.slice(0, 200)}` });
   }
 
+  /** A peer kept a card through several turns that changed none of its files: it goes back. */
+  stalled(peerId: PeerId, cardId: string, turns: number) {
+    const card = this.card(cardId);
+    if (card.state !== 'claimed' || card.owner !== peerId) return;
+    this.bounce(card, peerId, `@${peerId} held this card for ${turns} turns in a row without changing any of its files.`);
+    this.record('board', 'stalled', { cardId, detail: `${peerId}: ${turns} turns` });
+  }
+
   /** Returns cards whose lease ran out to the board. Peers with a turn in flight are left alone. */
   expireLeases(busy: Set<PeerId>): string[] {
     const now = this.now();

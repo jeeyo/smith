@@ -54,14 +54,6 @@ export const App: React.FC = () => {
   const [isStartupModalOpen, setIsStartupModalOpen] = useState(true);
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
 
-  // If loaded on Tauri custom domain, redirect to local server port
-  useEffect(() => {
-    if (window.location.hostname === 'tauri.localhost' || window.location.protocol === 'tauri:') {
-      console.log('[Tauri] Redirecting webview to backend server at http://127.0.0.1:4100');
-      window.location.replace('http://127.0.0.1:4100');
-    }
-  }, []);
-
   // Initial Data Fetch
   useEffect(() => {
     fetchHealth();

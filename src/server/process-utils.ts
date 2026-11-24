@@ -64,23 +64,28 @@ export function spawnCli(bin: string, args: string[], options: SpawnOptions = {}
   return proc;
 }
 
-/** Stops a CLI and the shells, servers and test runners it started: SIGTERM, then SIGKILL. */
-export function killTree(proc: ChildProcess) {
-  const send = (signal: NodeJS.Signals) => {
-    try {
-      if (process.platform !== 'win32' && proc.pid) process.kill(-proc.pid, signal);
-      else proc.kill(signal);
-    } catch {
-      // Already gone
-    }
-  };
-  send('SIGTERM');
-  setTimeout(() => send('SIGKILL'), KILL_GRACE_MS).unref();
+function signalTree(proc: ChildProcess, signal: NodeJS.Signals) {
+  try {
+    if (process.platform !== 'win32' && proc.pid) process.kill(-proc.pid, signal);
+    else proc.kill(signal);
+  } catch {
+    // Already gone
+  }
 }
 
-/** Stops every CLI still running, when the server shuts down. */
-export function killAllClis() {
-  for (const proc of live) killTree(proc);
+/** Stops a CLI and the shells, servers and test runners it started: SIGTERM, then SIGKILL. */
+export function killTree(proc: ChildProcess) {
+  signalTree(proc, 'SIGTERM');
+  setTimeout(() => signalTree(proc, 'SIGKILL'), KILL_GRACE_MS).unref();
+}
+
+/** Stops every CLI still running, when the server shuts down. Resolves once they have had `graceMs` to exit. */
+export async function stopAllClis(graceMs: number): Promise<void> {
+  const procs = Array.from(live);
+  for (const proc of procs) signalTree(proc, 'SIGTERM');
+  if (procs.length === 0) return;
+  await new Promise(resolve => setTimeout(resolve, graceMs));
+  for (const proc of procs) signalTree(proc, 'SIGKILL');
 }
 
 export interface CliResult {
