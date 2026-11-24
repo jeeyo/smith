@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import { EventEmitter } from 'node:events';
 import { Board, WakeReason } from './board.ts';
 import { boardStore } from './board-store.ts';
+import { boardTools } from './board-tools.ts';
+import { worktreeManager } from './worktree-manager.ts';
 import { sessionStore } from './session-store.ts';
 import { issueTurnToken, onToolCall, revokeTurnToken } from './mcp-server.ts';
 import { workerServers } from './mcp-connections.ts';
@@ -27,12 +29,22 @@ const TICK_INTERVAL_MS = 30_000;
 const MAX_TURN_HISTORY = 100;
 /** Turns in a row a peer may end without touching the board before its card is taken away. */
 const MAX_SILENT_TURNS = 2;
+/** Turns in a row a peer may continue a card without changing its files before it goes back. */
+const MAX_STALLED_TURNS = 3;
+
+/** Changes when a card's files change; without a git worktree, when the card itself does. */
+async function progressMark(card: Card | undefined): Promise<string | undefined> {
+  if (!card) return undefined;
+  const files = card.worktreePath ? await worktreeManager.fingerprint(card.worktreePath).catch(() => undefined) : undefined;
+  return files ?? `card:${card.updatedAt}`;
+}
 
 export type TurnRunner = (peer: Peer, request: TurnRequest) => Promise<TurnResult>;
 
 interface RunningTurn {
   record: TurnRecord;
   toolCalls: number;
+  abort: AbortController;
 }
 
 export class Scheduler extends EventEmitter {
@@ -40,6 +52,7 @@ export class Scheduler extends EventEmitter {
   private history: Map<string, TurnRecord[]> = new Map();
   private rotation: Map<string, number> = new Map();
   private silentTurns: Map<string, number> = new Map();
+  private stalledTurns: Map<string, { peer: PeerId; turns: number }> = new Map();
   private pending: Set<string> = new Set();
   private ticking: Set<string> = new Set();
   private timer?: NodeJS.Timeout;
@@ -109,10 +122,15 @@ export class Scheduler extends EventEmitter {
     return (this.running.get(sessionId)?.size || 0) > 0;
   }
 
+  /** Drops a deleted session, stopping its turns so they cannot write to its board again. */
   forget(sessionId: string) {
+    for (const turn of this.running.get(sessionId)?.values() || []) turn.abort.abort();
     this.running.delete(sessionId);
     this.history.delete(sessionId);
     this.rotation.delete(sessionId);
+    for (const key of this.stalledTurns.keys()) {
+      if (key.startsWith(`${sessionId}:`)) this.stalledTurns.delete(key);
+    }
   }
 
   private harnessReady(peer: Peer): boolean {
@@ -176,7 +194,7 @@ export class Scheduler extends EventEmitter {
         this.startTurn(session, board, peer, reason, cardId);
       }
 
-      board.escalateOrphans(stillIdle);
+      board.escalateOrphans(stillIdle, hinted);
 
       if (this.running.get(sessionId)!.size === 0 && board.data.goal.status === 'running') {
         this.settle(board);
@@ -222,6 +240,10 @@ export class Scheduler extends EventEmitter {
       return;
     }
 
+    // A handed-in card whose merge never ran (the server restarted, say) is merged now.
+    if (boardTools.resumeMerges(board.sessionId) > 0) return;
+    if (open.some(c => boardTools.isMerging(board.sessionId, c.id))) return;
+
     // An offer or a merge may still resolve by itself on a later pass.
     const now = Date.now();
     if (open.some(c => (c.offeredTo && c.offeredTo.until > now) || c.state === 'in_review')) {
@@ -237,7 +259,7 @@ export class Scheduler extends EventEmitter {
   }
 
   private startTurn(session: Session, board: Board, peer: Peer, reason: WakeReason, cardId: string) {
-    if (!board.countTurn(peer.id)) return;
+    board.countTurn(peer.id);
 
     const card = board.data.cards[cardId];
     const record: TurnRecord = {
@@ -250,35 +272,86 @@ export class Scheduler extends EventEmitter {
       cardId,
       startedAt: Date.now()
     };
-    const turn: RunningTurn = { record, toolCalls: 0 };
+    const turn: RunningTurn = { record, toolCalls: 0, abort: new AbortController() };
     this.running.get(session.id)!.set(peer.id, turn);
     this.emit('turn:started', record);
 
     const token = issueTurnToken({ sessionId: session.id, peerId: peer.id });
-    const cwd =
-      reason.kind !== 'claimable' && card?.worktreePath && fs.existsSync(card.worktreePath) ? card.worktreePath : session.worktree.path;
+    // Only a turn that continues a card it already holds can show whether the card moved.
+    const watched = reason.kind === 'continue' ? card : undefined;
 
-    const request: TurnRequest = {
-      prompt: buildTurnPrompt(session, board, peer, reason, cardId),
-      cwd,
-      model: peer.model,
-      mcp: { url: this.mcpUrl, token },
-      timeoutMs: board.data.limits.turnTimeoutMs,
-      // Skills and servers are resolved per worker: targets, plugins and ${WORKDIR} differ.
-      extraMcpServers: workerServers(session.id, resolveFor(session.customizations, peer.id, cwd).mcpServers)
+    const run = async (): Promise<TurnResult> => {
+      const { cwd, scratch } = await this.turnDirectory(session, peer, reason, card);
+      const request: TurnRequest = {
+        prompt: buildTurnPrompt(session, board, peer, reason, cardId, scratch),
+        cwd,
+        model: peer.model,
+        mcp: { url: this.mcpUrl, token },
+        timeoutMs: board.data.limits.turnTimeoutMs,
+        signal: turn.abort.signal,
+        // Skills and servers are resolved per worker: targets, plugins and ${WORKDIR} differ.
+        extraMcpServers: workerServers(session.id, resolveFor(session.customizations, peer.id, cwd).mcpServers)
+      };
+      return this.turnRunner(peer, request);
     };
 
+    let before: string | undefined;
     Promise.resolve()
-      .then(() => this.turnRunner(peer, request))
+      .then(async () => {
+        if (watched) before = await progressMark(watched);
+        return run();
+      })
       .catch((err): TurnResult => ({ ok: false, text: '', error: err?.message || String(err) }))
-      .then(result => this.finishTurn(session, board, peer, turn, result))
+      .then(async result => {
+        const after = watched && before !== undefined ? await progressMark(board.data.cards[cardId]).catch(() => undefined) : undefined;
+        this.finishTurn(session, board, peer, turn, result);
+        if (watched && before !== undefined && !turn.abort.signal.aborted) this.trackProgress(session, board, peer, cardId, before === after);
+      })
       .finally(() => {
         revokeTurnToken(token);
         this.poke(session.id);
       });
   }
 
+  /**
+   * Where a turn starts. A peer that holds a card starts in its work directory. Otherwise, when
+   * the session is a real worktree, it starts in its own scratch checkout of the session branch,
+   * so files it writes before claiming a card cannot reach the session branch.
+   */
+  private async turnDirectory(session: Session, peer: Peer, reason: WakeReason, card: Card | undefined): Promise<{ cwd: string; scratch: boolean }> {
+    if (reason.kind !== 'claimable' && card?.worktreePath && fs.existsSync(card.worktreePath)) {
+      return { cwd: card.worktreePath, scratch: false };
+    }
+    if (await boardTools.isManaged(session)) {
+      try {
+        return { cwd: await worktreeManager.prepareLobby(session.repoPath, session.worktree.branch, peer.id), scratch: true };
+      } catch (err) {
+        console.warn(`[scheduler] no scratch checkout for ${peer.id}; starting in the session worktree:`, err);
+      }
+    }
+    return { cwd: session.worktree.path, scratch: false };
+  }
+
+  /** Counts a peer's turns on a held card that changed nothing, and takes the card back after a few. */
+  private trackProgress(session: Session, board: Board, peer: Peer, cardId: string, unchanged: boolean) {
+    const key = `${session.id}:${cardId}`;
+    const card = board.data.cards[cardId];
+    const previous = this.stalledTurns.get(key);
+    if (!card || card.state !== 'claimed' || card.owner !== peer.id || !unchanged) {
+      this.stalledTurns.delete(key);
+      return;
+    }
+    const turns = previous?.peer === peer.id ? previous.turns + 1 : 1;
+    if (turns >= MAX_STALLED_TURNS) {
+      this.stalledTurns.delete(key);
+      board.stalled(peer.id, cardId, turns);
+    } else {
+      this.stalledTurns.set(key, { peer: peer.id, turns });
+    }
+  }
+
   private finishTurn(session: Session, board: Board, peer: Peer, turn: RunningTurn, result: TurnResult) {
+    if (turn.abort.signal.aborted) return;
     this.running.get(session.id)?.delete(peer.id);
     const record = turn.record;
     record.endedAt = Date.now();
@@ -310,7 +383,8 @@ export class Scheduler extends EventEmitter {
       });
     } else if (!result.ok) {
       board.turnFailed(peer.id, result.error || 'The turn failed');
-      if (turn.toolCalls === 0) {
+      // A timeout says the turn was slow, not that the CLI is broken for every peer using it.
+      if (turn.toolCalls === 0 && !result.timedOut) {
         // A rejected CLI invocation cannot fail a card it never claimed. Without a health
         // gate it is immediately rescheduled until the entire goal budget is exhausted.
         const current = agentHealthEngine.get(peer.harness);
@@ -383,7 +457,7 @@ function cardDetail(board: Board, card: Card): string {
  * Everything a peer is told for one turn. It carries one line per card and the full thread
  * of only the card in hand, so it grows with the number of cards and not with the discussion.
  */
-export function buildTurnPrompt(session: Session, board: Board, peer: Peer, reason: WakeReason, cardId: string): string {
+export function buildTurnPrompt(session: Session, board: Board, peer: Peer, reason: WakeReason, cardId: string, scratch = false): string {
   const card = board.data.cards[cardId];
   const team = Object.values(board.data.peers)
     .map(p => `@${p.id} (${p.harness} · ${p.model}, tier ${p.tier}${p.status === 'removed' ? ', away' : ''})`)
@@ -417,6 +491,9 @@ export function buildTurnPrompt(session: Session, board: Board, peer: Peer, reas
     `Team: ${team}`,
     `Repository: ${session.repoPath}`,
     `Session worktree (the merged result of finished cards): ${session.worktree.path}`,
+    ...(scratch
+      ? ['You start in a scratch copy of the session branch. It is reset before your next turn and nothing written there is kept: claim a card first and make changes only in the directory card_claim gives you.']
+      : []),
     '',
     card ? `## The card in hand\n${cardDetail(board, card)}` : '',
     '',
@@ -431,6 +508,7 @@ export function buildTurnPrompt(session: Session, board: Board, peer: Peer, reas
     '- On a review card: read the diff and the files, judge them against the acceptance criteria and the spec, change nothing, and finish with review_verdict.',
     '- On a verify card: run the commands, report each exit code in your summary, and submit with passed true or false. If it fails, create cards for what is wrong before you submit.',
     '- End your turn once your card is submitted, released, blocked or handed to the user, or when there is nothing useful for you to do.',
+    `- A card you keep for ${MAX_STALLED_TURNS} turns in a row without changing any of its files goes back to the board. If you are stuck, release, block or split it, or ask the user.`,
     skills.length > 0 ? `\n## Team conventions\n${skills.join('\n')}` : ''
   ]
     .filter(line => line !== undefined)

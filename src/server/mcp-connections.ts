@@ -149,7 +149,7 @@ async function authorization(server: CustomMCPServer, force = false): Promise<st
 /** A local credential broker means every harness gets refresh support without token argv. */
 export function workerServers(sessionId: string, servers: ResolvedServer[]): ResolvedServer[] {
   return [
-    { id: 'smith', transport: 'http', url: `${smithBaseUrl()}/mcp?sessionId=${encodeURIComponent(sessionId)}`, command: '', args: [] },
+    { id: 'smith', transport: 'http', url: `${smithBaseUrl()}/mcp?role=worker&sessionId=${encodeURIComponent(sessionId)}`, command: '', args: [] },
     ...servers.filter(server => !['board', 'smith'].includes(server.id)).map(server => server.transport === 'http'
       ? { id: server.id, command: '', args: [], transport: 'http' as const, url: `${smithBaseUrl()}/api/v1/sessions/${encodeURIComponent(sessionId)}/mcp/${encodeURIComponent(server.id)}/proxy` }
       : server)

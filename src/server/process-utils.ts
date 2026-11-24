@@ -36,22 +36,56 @@ function quoteForCmd(arg: string): string {
   return `"${arg.replace(/\r?\n/g, ' ').replace(/"/g, '""')}"`;
 }
 
+const live: Set<ChildProcess> = new Set();
+const KILL_GRACE_MS = 5000;
+
 /**
  * Spawns an agent CLI with its arguments passed as real argv entries.
  *
  * `spawn(bin, args, { shell: true })` joins args with spaces and hands the result to the
  * shell unescaped, so a multi-line prompt is word-split and its later lines run as commands.
  * A shell is only needed on Windows for .cmd/.bat shims, where each argument is quoted.
+ *
+ * On POSIX the CLI leads its own process group, so killTree can stop everything it started.
  */
 export function spawnCli(bin: string, args: string[], options: SpawnOptions = {}): ChildProcess {
+  let proc: ChildProcess;
   if (process.platform === 'win32') {
     const resolved = findOnPath(bin) || bin;
-    if (/\.(cmd|bat)$/i.test(resolved)) {
-      return spawn(quoteForCmd(resolved), args.map(quoteForCmd), { ...options, shell: true });
-    }
-    return spawn(resolved, args, { ...options, shell: false });
+    proc = /\.(cmd|bat)$/i.test(resolved)
+      ? spawn(quoteForCmd(resolved), args.map(quoteForCmd), { ...options, shell: true })
+      : spawn(resolved, args, { ...options, shell: false });
+  } else {
+    proc = spawn(bin, args, { ...options, shell: false, detached: true });
   }
-  return spawn(bin, args, { ...options, shell: false });
+  live.add(proc);
+  proc.on('exit', () => live.delete(proc));
+  proc.on('error', () => live.delete(proc));
+  return proc;
+}
+
+function signalTree(proc: ChildProcess, signal: NodeJS.Signals) {
+  try {
+    if (process.platform !== 'win32' && proc.pid) process.kill(-proc.pid, signal);
+    else proc.kill(signal);
+  } catch {
+    // Already gone
+  }
+}
+
+/** Stops a CLI and the shells, servers and test runners it started: SIGTERM, then SIGKILL. */
+export function killTree(proc: ChildProcess) {
+  signalTree(proc, 'SIGTERM');
+  setTimeout(() => signalTree(proc, 'SIGKILL'), KILL_GRACE_MS).unref();
+}
+
+/** Stops every CLI still running, when the server shuts down. Resolves once they have had `graceMs` to exit. */
+export async function stopAllClis(graceMs: number): Promise<void> {
+  const procs = Array.from(live);
+  for (const proc of procs) signalTree(proc, 'SIGTERM');
+  if (procs.length === 0) return;
+  await new Promise(resolve => setTimeout(resolve, graceMs));
+  for (const proc of procs) signalTree(proc, 'SIGKILL');
 }
 
 export interface CliResult {
@@ -60,6 +94,7 @@ export interface CliResult {
   /** Exit code; 124 on timeout, 1 when the process could not be spawned. */
   code: number;
   timedOut: boolean;
+  aborted?: boolean;
   spawnError?: string;
 }
 
@@ -69,7 +104,7 @@ export interface CliResult {
 export function runCli(
   bin: string,
   args: string[],
-  options: { cwd?: string; timeoutMs?: number; env?: Record<string, string> } = {}
+  options: { cwd?: string; timeoutMs?: number; env?: Record<string, string>; signal?: AbortSignal } = {}
 ): Promise<CliResult> {
   return new Promise<CliResult>((resolve) => {
     let stdout = '';
@@ -79,8 +114,18 @@ export function runCli(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      options.signal?.removeEventListener('abort', onAbort);
       resolve(result);
     };
+    const onAbort = () => {
+      killTree(proc);
+      finish({ stdout, stderr, code: 130, timedOut: false, aborted: true });
+    };
+
+    if (options.signal?.aborted) {
+      resolve({ stdout, stderr, code: 130, timedOut: false, aborted: true });
+      return;
+    }
 
     let proc: ChildProcess;
     try {
@@ -95,9 +140,10 @@ export function runCli(
     }
 
     const timer = setTimeout(() => {
-      try { proc.kill(); } catch {}
+      killTree(proc);
       finish({ stdout, stderr, code: 124, timedOut: true });
     }, options.timeoutMs ?? 120000);
+    options.signal?.addEventListener('abort', onAbort, { once: true });
 
     proc.stdout?.on('data', (d) => { stdout += d.toString(); });
     proc.stderr?.on('data', (d) => { stderr += d.toString(); });

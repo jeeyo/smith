@@ -54,6 +54,8 @@ class BoardStore extends EventEmitter {
   }
 
   private persist(board: Board, entry: BoardLogEntry) {
+    // A board whose session was deleted must not write its file back.
+    if (this.boards.get(board.sessionId) !== board) return;
     try {
       const file = this.file(board.sessionId);
       const tmp = `${file}.tmp`;

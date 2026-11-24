@@ -394,7 +394,7 @@ export const BoardView: React.FC<BoardViewProps> = ({ board, log, runningTurns, 
               {statusLabel}
             </span>
             <span className="hidden sm:inline text-ink-400 text-[11px]" title="Turns used / plan edits made on this goal">
-              {board.counters.turns}/{board.limits.maxTurns} turns · {board.counters.planEdits} plan edits
+              {board.counters.turns} turns · {board.counters.planEdits} plan edits
             </span>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">

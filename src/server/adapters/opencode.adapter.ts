@@ -52,7 +52,8 @@ export class OpencodeAdapter implements AgentAdapter {
     const res = await runCli(binary, ['run', ...flags, '--model', request.model, request.prompt], {
       cwd: request.cwd,
       timeoutMs: request.timeoutMs,
-      env: { OPENCODE_CONFIG_CONTENT: JSON.stringify(inlineConfig) }
+      env: { OPENCODE_CONFIG_CONTENT: JSON.stringify(inlineConfig) },
+      signal: request.signal
     });
     return plainResult('OpenCode', res);
   }

@@ -13,6 +13,8 @@ export interface TurnRequest {
   timeoutMs: number;
   /** Extra MCP servers the session enabled, started by the CLI for this turn. */
   extraMcpServers?: ResolvedServer[];
+  /** Aborting stops the CLI and everything it started. */
+  signal?: AbortSignal;
 }
 
 export interface TurnResult {
