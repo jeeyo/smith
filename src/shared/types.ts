@@ -1,6 +1,6 @@
 import type { HarnessId, ReviewMode, Tier } from './board.ts';
 
-/** A harness id ('claude', 'codex', 'opencode') or a peer id such as 'claude-1'. */
+/** A harness id ('claude', 'codex', 'opencode', 'cursor') or a peer id such as 'claude-1'. */
 export type AgentId = string;
 
 export interface DiscoveredModel {

@@ -30,7 +30,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, onSaved }) 
   const [agentBinaries, setAgentBinaries] = useState<Record<string, string>>({
     claude: 'claude',
     codex: 'codex',
-    opencode: 'opencode'
+    opencode: 'opencode',
+    cursor: 'cursor-agent'
   });
 
   const [app, setApp] = useState({
@@ -402,6 +403,68 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, onSaved }) 
                       <span className="flex items-center gap-1 text-butter-600">
                         <AlertCircle className="w-3.5 h-3.5" />
                         <span>OpenCode not found at this path. OpenCode workers will remain disabled until configured.</span>
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Cursor CLI */}
+              <div className="p-5 rounded-2xl bg-ink-0 shadow-soft space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-semibold text-ink-800">Cursor CLI</span>
+                    <p className="text-[11px] text-ink-500">
+                      Executable used for Cursor Agent workers. Log in with <span className="font-mono">cursor-agent login</span>.
+                    </p>
+                  </div>
+                  {detectedBinaries.cursor && (
+                    <button
+                      onClick={() => {
+                        setAgentBinaries(prev => ({ ...prev, cursor: detectedBinaries.cursor }));
+                        probeBinary('cursor', detectedBinaries.cursor);
+                      }}
+                      className="flex-shrink-0 whitespace-nowrap text-[10.5px] text-butter-700 flex items-center gap-1 px-2 py-0.5 rounded-full bg-butter-50 hover:bg-butter-100"
+                    >
+                      <Sparkles className="w-3 h-3 text-butter-600" />
+                      <span>Use detected</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={agentBinaries.cursor || ''}
+                    onChange={e => setAgentBinaries({ ...agentBinaries, cursor: e.target.value })}
+                    placeholder="cursor-agent or ~/.local/bin/cursor-agent"
+                    className="flex-1 bg-ink-50 rounded-xl px-3 py-2 text-xs text-ink-800 font-mono ring-1 ring-transparent focus:outline-none focus:ring-lav-300"
+                  />
+                  <button
+                    onClick={() => probeBinary('cursor', agentBinaries.cursor)}
+                    disabled={probeStatuses['cursor']?.checking}
+                    className="px-3 py-1.5 rounded-xl bg-ink-100 hover:bg-ink-100 border border-ink-300 text-xs text-ink-800 transition-colors flex items-center gap-1"
+                  >
+                    {probeStatuses['cursor']?.checking ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Search className="w-3.5 h-3.5" />
+                    )}
+                    <span>Verify</span>
+                  </button>
+                </div>
+
+                {probeStatuses['cursor'] && !probeStatuses['cursor'].checking && (
+                  <div className="flex items-center gap-1.5 text-xs">
+                    {probeStatuses['cursor'].exists ? (
+                      <span className="flex items-center gap-1 text-mint-600">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Executable Verified: {probeStatuses['cursor'].resolvedPath}</span>
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-butter-600">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        <span>Cursor CLI not found at this path. Cursor workers will remain disabled until configured.</span>
                       </span>
                     )}
                   </div>

@@ -57,7 +57,7 @@ export const SmithAssistant: React.FC<{
   if (!isOpen) return null;
   const send = (event: React.FormEvent) => { event.preventDefault(); void sendMessage(input); };
   const busy = sending || chat?.running;
-  const defaults: Record<string, string> = { claude: 'sonnet', codex: 'gpt-6.1-sol', opencode: 'agoda/glm-5.2' };
+  const defaults: Record<string, string> = { claude: 'sonnet', codex: 'gpt-6.1-sol', opencode: 'agoda/glm-5.2', cursor: 'auto' };
   return <div className="fixed inset-0 z-50 bg-ink-900/20 flex items-center justify-center p-3 md:p-6">
     <section role="dialog" aria-modal="true" aria-labelledby="smith-assistant-title" className="bg-ink-0 shadow-float rounded-2xl flex flex-col w-full max-w-3xl h-[min(800px,90dvh)]">
       <header className="p-4 border-b border-ink-100 flex justify-between gap-3">
@@ -81,7 +81,7 @@ export const SmithAssistant: React.FC<{
       </div>
       <form onSubmit={send} className="p-4 border-t border-ink-100 space-y-3">
         <div className="flex gap-2 text-xs items-center flex-wrap">
-          <label>Assistant <select aria-label="Assistant harness" value={harness} disabled={busy} onChange={e => { setHarness(e.target.value); setModel(defaults[e.target.value]); }} className="p-1 rounded bg-ink-50"><option value="claude">Claude</option><option value="codex">Codex</option><option value="opencode">OpenCode</option></select></label>
+          <label>Assistant <select aria-label="Assistant harness" value={harness} disabled={busy} onChange={e => { setHarness(e.target.value); setModel(defaults[e.target.value]); }} className="p-1 rounded bg-ink-50"><option value="claude">Claude</option><option value="codex">Codex</option><option value="opencode">OpenCode</option><option value="cursor">Cursor</option></select></label>
           <input aria-label="Assistant model" value={model} onChange={e => setModel(e.target.value)} disabled={busy} list="smith-assistant-models" className="px-2 py-1 rounded bg-ink-50 min-w-0"/>
           <datalist id="smith-assistant-models">{models.filter(m => m.agentId === harness).map(m => <option key={m.id} value={m.id}/>)}</datalist>
           <button type="button" disabled={busy} onClick={() => { setChat(null); setError(''); localStorage.removeItem('smith_assistant_chat'); }} className="ml-auto text-ink-500 disabled:opacity-50">New chat</button>

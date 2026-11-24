@@ -10,6 +10,7 @@ import { config } from '../src/server/config.ts';
 import { OpencodeAdapter } from '../src/server/adapters/opencode.adapter.ts';
 import { ClaudeAdapter } from '../src/server/adapters/claude.adapter.ts';
 import { CodexAdapter } from '../src/server/adapters/codex.adapter.ts';
+import { CursorAdapter, parseResult } from '../src/server/adapters/cursor.adapter.ts';
 
 afterAll(() => {
   server.close();
@@ -160,6 +161,92 @@ console.log(JSON.stringify({args: process.argv.slice(2), token: process.env.SMIT
       config.agentBinaries.codex = previous;
       fs.rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('Cursor CLI turns', () => {
+  // Stands in for cursor-agent: reads the plugin's .mcp.json and resolves ${env:NAME} like the CLI.
+  const fake = `#!${process.execPath}
+const fs = require('node:fs'), path = require('node:path');
+const args = process.argv.slice(2);
+if (process.env.FAKE_FAIL) { console.error('Error: not logged in. Please run cursor-agent login'); process.exit(1); }
+const dir = args[args.indexOf('--plugin-dir') + 1];
+const raw = fs.readFileSync(path.join(dir, '.mcp.json'), 'utf8');
+const resolved = JSON.parse(raw.replace(/\\$\\{env:([A-Za-z_][A-Za-z0-9_]*)\\}/g, (_, n) => process.env[n] || ''));
+const plugin = JSON.parse(fs.readFileSync(path.join(dir, '.cursor-plugin', 'plugin.json'), 'utf8'));
+console.log(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: JSON.stringify({ args, raw, resolved, plugin, dir }) }));
+`;
+
+  async function withFake<T>(run: (dir: string) => Promise<T>): Promise<T> {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'smith-cursor-test-'));
+    const binary = path.join(dir, 'cursor-agent');
+    fs.writeFileSync(binary, fake, { mode: 0o700 });
+    const previous = config.agentBinaries.cursor;
+    config.agentBinaries.cursor = binary;
+    try { return await run(dir); } finally {
+      config.agentBinaries.cursor = previous;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it('attaches the board through a per-turn plugin and keeps secrets out of arguments and files', async () => {
+    await withFake(async dir => {
+      const result = await new CursorAdapter().runTurn({
+        cwd: dir, model: 'auto', prompt: '-starts with a dash', timeoutMs: 5000,
+        mcp: { url: 'http://127.0.0.1:4100/mcp', token: 'test-board-token' },
+        extraMcpServers: [
+          { id: 'remote', transport: 'http', command: '', args: [], url: 'http://127.0.0.1:4100/proxy', headers: { 'X-Test': 'private-header' } },
+          { id: 'local', transport: 'stdio', command: 'node', args: ['server.js'], env: { API_KEY: 'private-env' } }
+        ]
+      });
+      expect(result.ok).toBe(true);
+      const run = JSON.parse(result.text);
+      expect(run.args).toEqual(expect.arrayContaining(['-p', '--output-format', 'stream-json', '--force', '--trust', '--approve-mcps', '--workspace', dir]));
+      expect(run.args.slice(-2)).toEqual(['--', '-starts with a dash']);
+      expect(run.plugin.name).toBe('smith-turn');
+      expect(run.resolved.mcpServers.board.headers.Authorization).toBe('Bearer test-board-token');
+      expect(run.resolved.mcpServers.remote.headers['X-Test']).toBe('private-header');
+      expect(run.resolved.mcpServers.local).toMatchObject({ command: 'node', args: ['server.js'], env: { API_KEY: 'private-env' } });
+      for (const secret of ['test-board-token', 'private-header', 'private-env']) {
+        expect(run.raw).not.toContain(secret);
+        expect(run.args.join(' ')).not.toContain(secret);
+      }
+      expect(fs.existsSync(run.dir)).toBe(false);
+    });
+  });
+
+  it('gives concurrent turns their own board credentials', async () => {
+    await withFake(async dir => {
+      const results = await Promise.all(['first', 'second'].map(token => new CursorAdapter().runTurn({
+        cwd: dir, model: 'auto', prompt: 'Use the board.', timeoutMs: 5000, mcp: { url: 'http://127.0.0.1:4100/mcp', token }
+      })));
+      expect(results.map(r => JSON.parse(r.text).resolved.mcpServers.board.headers.Authorization)).toEqual(['Bearer first', 'Bearer second']);
+    });
+  });
+
+  it('keeps the final assistant message rather than the joined result text', () => {
+    const lines = [
+      { type: 'system', subtype: 'init' },
+      { type: 'assistant', message: { content: [{ type: 'text', text: "I'll call the tool." }] } },
+      { type: 'tool_call', subtype: 'completed' },
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'PINEAPPLE-42' }] } },
+      { type: 'result', subtype: 'success', is_error: false, result: "I'll call the tool.PINEAPPLE-42" }
+    ].map(e => JSON.stringify(e)).join('\n');
+    expect(parseResult({ stdout: lines, stderr: '', code: 0, timedOut: false })).toEqual({ ok: true, text: 'PINEAPPLE-42' });
+    const cut = parseResult({ stdout: lines.split('\n').slice(0, 2).join('\n'), stderr: 'Error: connection lost', code: 1, timedOut: false });
+    expect(cut.ok).toBe(false);
+    expect(cut.error).toContain('connection lost');
+  });
+
+  it('reports a logged-out CLI', async () => {
+    await withFake(async dir => {
+      process.env.FAKE_FAIL = '1';
+      try {
+        const result = await new CursorAdapter().runTurn({ cwd: dir, model: 'auto', prompt: 'x', timeoutMs: 5000, mcp: { url: 'http://127.0.0.1:4100/mcp', token: 't' } });
+        expect(result.ok).toBe(false);
+        expect(result.notLoggedIn).toBe(true);
+      } finally { delete process.env.FAKE_FAIL; }
+    });
   });
 });
 

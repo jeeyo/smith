@@ -8,7 +8,7 @@ export interface ToolContext { sessionId?: string; chatId?: string }
 export const assistantContexts = new Map<string, ToolContext>();
 const text = z.string().trim().min(1);
 const session = { sessionId: text.optional().describe('Session id; defaults to the current session when attached by Smith.') };
-const worker = z.object({ agentId: z.enum(['claude', 'codex', 'opencode']), model: text, tier: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(), workerId: text.optional() }).strict();
+const worker = z.object({ agentId: z.enum(['claude', 'codex', 'opencode', 'cursor']), model: text, tier: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(), workerId: text.optional() }).strict();
 type Tool = { name: string; description: string; schema: z.ZodType; method?: string; route: (args: any, context: ToolContext) => string; body?: (args: any, context: ToolContext) => unknown };
 const id = (args: any, context: ToolContext) => {
   const value = args.sessionId || context.sessionId;

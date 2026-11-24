@@ -111,7 +111,7 @@ beforeEach(() => {
   }
   scheduler.start();
   // The scripted peers stand in for CLIs that may not be installed on this machine.
-  for (const harness of ['claude', 'codex', 'opencode']) {
+  for (const harness of ['claude', 'codex', 'opencode', 'cursor']) {
     agentHealthEngine.setStatus(harness, { agentId: harness, name: harness, installed: true, authenticated: true, status: 'ready', message: 'ok', lastCheckedAt: Date.now() });
   }
 });

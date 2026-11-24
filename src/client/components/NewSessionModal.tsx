@@ -24,7 +24,8 @@ interface NewSessionModalProps {
 export const HARNESS_LABELS: Record<HarnessId, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
-  opencode: 'OpenCode'
+  opencode: 'OpenCode',
+  cursor: 'Cursor CLI'
 };
 
 export const REVIEW_MODES: Array<{ id: ReviewMode; label: string; hint: string }> = [

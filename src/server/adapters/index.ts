@@ -4,14 +4,16 @@ import { AgentAdapter } from './types.ts';
 import { claudeAdapter } from './claude.adapter.ts';
 import { codexAdapter } from './codex.adapter.ts';
 import { opencodeAdapter } from './opencode.adapter.ts';
+import { cursorAdapter } from './cursor.adapter.ts';
 import { HarnessId } from '../../shared/board.ts';
 
-export const HARNESSES: HarnessId[] = ['claude', 'codex', 'opencode'];
+export const HARNESSES: HarnessId[] = ['claude', 'codex', 'opencode', 'cursor'];
 
 const registry = new Map<string, AgentAdapter>([
   ['claude', claudeAdapter],
   ['codex', codexAdapter],
-  ['opencode', opencodeAdapter]
+  ['opencode', opencodeAdapter],
+  ['cursor', cursorAdapter]
 ]);
 
 export function isHarness(id: unknown): id is HarnessId {

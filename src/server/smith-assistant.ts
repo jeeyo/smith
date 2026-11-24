@@ -33,8 +33,8 @@ class SmithAssistant {
   send(input: { chatId?: string; sessionId?: string; message: string; harness?: string; model?: string }) {
     if (typeof input.message !== 'string' || !input.message.trim() || input.message.length > 32000) throw new Error('A message of at most 32,000 characters is required.');
     const harness = input.harness || 'claude';
-    if (!isHarness(harness)) throw new Error('Choose Claude, Codex or OpenCode.');
-    const model = input.model?.trim() || ({ claude: 'sonnet', codex: 'gpt-6.1-sol', opencode: 'agoda/glm-5.2' })[harness];
+    if (!isHarness(harness)) throw new Error('Choose Claude, Codex, OpenCode or Cursor.');
+    const model = input.model?.trim() || ({ claude: 'sonnet', codex: 'gpt-6.1-sol', opencode: 'agoda/glm-5.2', cursor: 'auto' })[harness];
     const chat: SmithChat = input.chatId ? this.get(input.chatId) : { id: crypto.randomUUID(), messages: [], running: false, sessionId: input.sessionId };
     if (chat.running) throw new Error('Smith is still handling the previous message.');
     if (input.sessionId && !getSession(input.sessionId)) throw new Error('Session not found.');

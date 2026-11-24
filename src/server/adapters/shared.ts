@@ -5,9 +5,11 @@ import { HarnessId } from '../../shared/board.ts';
 import { config } from '../config.ts';
 import { findOnPath, runCli } from '../process-utils.ts';
 
+const DEFAULT_BINARIES: Partial<Record<HarnessId, string>> = { cursor: 'cursor-agent' };
+
 export function configuredBinary(harness: HarnessId): string {
   const custom = (config.agentBinaries?.[harness] || '').trim().replace(/^["']|["']$/g, '');
-  return custom || harness;
+  return custom || DEFAULT_BINARIES[harness] || harness;
 }
 
 export function binaryInstalled(bin: string): boolean {

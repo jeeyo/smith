@@ -70,7 +70,7 @@ export const StartupProgressModal: React.FC<StartupProgressModalProps> = ({
       label: 'Agent CLIs',
       description: totalAgentsCount > 0
         ? `${activeAgentsCount} of ${totalAgentsCount} agent CLIs found`
-        : 'Looking for Claude Code, Codex and OpenCode…',
+        : 'Looking for Claude Code, Codex, OpenCode and Cursor CLI…',
       icon: <Cpu className="w-4 h-4" />,
       status: totalAgentsCount > 0 ? 'success' : 'running',
       detail: totalAgentsCount > 0 ? `${activeAgentsCount} ready` : 'Probing...'

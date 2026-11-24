@@ -25,7 +25,8 @@ interface TopBarProps {
 const HARNESSES: Array<{ id: string; label: string; login: string }> = [
   { id: 'claude', label: 'Claude', login: 'claude login' },
   { id: 'codex', label: 'Codex', login: 'codex login' },
-  { id: 'opencode', label: 'OpenCode', login: 'opencode auth login' }
+  { id: 'opencode', label: 'OpenCode', login: 'opencode auth login' },
+  { id: 'cursor', label: 'Cursor', login: 'cursor-agent login' }
 ];
 
 const iconButton = 'p-2 rounded-lg text-ink-400 hover:text-ink-800 hover:bg-ink-100 transition-colors';
