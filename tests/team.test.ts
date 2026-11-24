@@ -305,7 +305,8 @@ describe('A leaderless team working a goal', () => {
 
     runWith(async (peer, req, t) => {
       const read = await t('board_read');
-      const id = read.yourCards[0] || read.claimable[0];
+      // Both peers wake together; reaching for different cards keeps either from losing a claim race.
+      const id = read.yourCards[0] || read.claimable[peer.id === 'claude-2' ? read.claimable.length - 1 : 0];
       if (!id) return;
       const claimed = read.yourCards[0] ? await t('board_read', { cardId: id }) : await t('card_claim', { cardId: id });
       const card = claimed.card;
@@ -318,6 +319,8 @@ describe('A leaderless team working a goal', () => {
         return;
       }
       if (card.title === 'Left') {
+        // Right must branch before Left merges, or there is nothing to conflict with.
+        await until(() => board.cards().find(c => c.title === 'Right')!.state === 'claimed', 'right claimed');
         fs.writeFileSync(path.join(dir, 'shared.txt'), 'left\n');
         await t('card_submit', { cardId: card.id, summary: 'left' });
         return;
@@ -373,6 +376,8 @@ describe('A leaderless team working a goal', () => {
         return { ok: false, text: '', error: 'limit', usageLimit: { message: 'Claude usage limit reached', resetAt: Date.now() + 120 } };
       }
       if (peer.harness === 'opencode') {
+        // Both peers wake together; claiming first would leave claude nothing to hold.
+        await until(() => heldByClaude !== undefined, 'claude holds a card');
         const read = await t('board_read');
         if (read.cards.some((line: string) => line.includes('[ready verify]'))) {
           // Hold the last card until the limit has reset, so the rejoin happens mid-goal.
